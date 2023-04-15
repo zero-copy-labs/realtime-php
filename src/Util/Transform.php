@@ -2,70 +2,71 @@
 
 namespace Supabase\Util;
 
-use Supabase\Util\PostgresTypes;
+class Transform
+{
+	public static function toBoolean($value)
+	{
+		if (is_bool($value)) {
+			return $value;
+		}
 
-class Transform {
+		if (is_string($value)) {
+			return $value === 'true' || $value === 't';
+		}
 
-    public static function toBoolean($value) {
-        if (is_bool($value)) {
-            return $value;
-        }
+		return false;
+	}
 
-        if (is_string($value)) {
-            return $value === 'true' || $value === 't';
-        }
+	public static function toInteger($value)
+	{
+		if (is_int($value)) {
+			return $value;
+		}
 
-        return false;
-    }
+		if (is_string($value)) {
+			return intval($value);
+		}
 
-    public static function toInteger($value) {
-        if (is_int($value)) {
-            return $value;
-        }
+		return 0;
+	}
 
-        if (is_string($value)) {
-            return intval($value);
-        }
+	public static function transformCell($value, $type)
+	{
+		if ($type === Postgres->Types['bool']) {
+			return self::toBoolean($value);
+		}
 
-        return 0;
-    }
+		if ($type === Postgres->Types['oid']) {
+			return self::toInteger($value);
+		}
 
-    public static function transformCell($value, $type) {
-        if ($type === Postgres->Types['bool']) {
-            return self::toBoolean($value);
-        }
+		return $value;
+	}
 
-        if ($type === Postgres->Types['oid']) {
-            return self::toInteger($value);
-        }
+	public static function transformColumn($columnName, $columns, $record, $skipTypes)
+	{
+		$column = $columns[$columnName];
+		$type = $column['type'];
+		$value = $record[$columnName];
 
-        return $value;
-    }
+		if ($skipTypes) {
+			return $value;
+		}
 
-    public static function transformColumn($columnName, $columns, $record, $skipTypes) {
-        $column = $columns[$columnName];
-        $type = $column['type'];
-        $value = $record[$columnName];
+		return self::transformCell($value, $type);
+	}
 
-        if ($skipTypes) {
-            return $value;
-        }
+	public static function transformChangeData($columns, $record, $options)
+	{
+		$skipTypes = $options['skipTypes'] ?? false;
+		$columns = $options['columns'] ?? $columns;
 
-        return self::transformCell($value, $type);
-    }
+		$transformedRecord = [];
 
-    public static function transformChangeData($columns, $record, $options) {
-        $skipTypes = $options['skipTypes'] ?? false;
-        $columns = $options['columns'] ?? $columns;
+		foreach ($columns as $columnName => $column) {
+			$transformedRecord[$columnName] = self::transformColumn($columnName, $columns, $record, $skipTypes);
+		}
 
-        $transformedRecord = [];
-
-        foreach ($columns as $columnName => $column) {
-            $transformedRecord[$columnName] = self::transformColumn($columnName, $columns, $record, $skipTypes);
-        }
-
-        return $transformedRecord;
-    }
-
-
+		return $transformedRecord;
+	}
 }

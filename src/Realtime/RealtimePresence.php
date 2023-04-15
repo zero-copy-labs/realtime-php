@@ -5,7 +5,7 @@ namespace Supabase\Realtime;
 $defaultEvents = [
     'state' => 'presence_state',
     'diff' => 'presence_diff',
-]
+];
 
 class RealtimePresence
 {
