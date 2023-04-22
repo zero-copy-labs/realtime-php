@@ -4,14 +4,9 @@ namespace Supabase\Util;
 
 class Constants
 {
-	public static function getDefaultHeaders()
-	{
-		return [
-			'X-Client-Info' => 'realtime-php/'.self::$VERSION,
-		];
-	}
-
 	public static $VERSION = '0.0.1';
+
+	public static $VSN = '1.0.0';
 
 	public static $DEFAULT_TIMEOUT = 10000;
 
@@ -45,10 +40,17 @@ class Constants
 		'websocket' => 'websocket',
 	];
 
-	public static $CONNECTION_STATE = [
-		'Connecting' => 'connecting',
-		'Open' => 'open',
-		'Closing' => 'closing',
-		'Closed' => 'closed',
+	public static $CONNECTION_STATES = [
+		'connecting' => 'connecting',
+		'open' => 'open',
+		'closing' => 'closing',
+		'closed' => 'closed',
 	];
+
+	public static function getDefaultHeaders()
+	{
+		return [
+			'X-Client-Info' => 'storage-php/'.self::$VERSION,
+		];
+	}
 }

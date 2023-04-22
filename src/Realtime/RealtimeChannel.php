@@ -8,58 +8,75 @@ use Supabase\Util\PostgresTypes;
 use Supabase\Util\Constants;
 use Supabase\Util\Push;
 
-$DEFAULT_CONFIG = [
-    'broadcast' => [
-        'ack' => false,
-        'self' => false,
-    ],
-    'presence' => ['key' => '']
-];
-
 class RealtimeChannel
 {
     public $bindings = [];
     public $timeout;
-    public $state = Constants::CHANNEL_STATES['closed'];
+    public $state;
     public $joinedOnce = false;
     public $joinPush;
     public $rejoinTimer;
     public $pushBuffer = [];
     public $presence;
 
-    function __construct($topic, $params, $socket)
+    function __construct($topic, $params = ['config' => []], $socket)
     {
+        $this->state = Constants::$CHANNEL_STATES['closed'];
         $this->socket = $socket;
         $this->topic = $topic;
+
+        $DEFAULT_CONFIG = [
+            'broadcast' => [
+                'ack' => false,
+                'self' => false,
+            ],
+            'presence' => ['key' => '']
+        ];
+
+        if(!isset($params['config']) || !is_array($params['config'])) {
+            $params['config'] = [];
+        }
+
         $this->params = [
             'config' => array_merge($DEFAULT_CONFIG, $params['config'])
         ];
 
         $this->timeout = $this->socket->timeout;
-        $this->joinPush = new Push($this, Constants::CHANNEL_EVENTS['join'], $this->params, $this->timeout);
-        $this->rejoinTimer = new Timer($this->socket->reconnectAfterMs, $this->rejoinUntilConnected.bind($this));
+        $this->joinPush = new Push($this, Constants::$CHANNEL_EVENTS['join'], $this->params, $this->timeout);
+        $closure = \Closure::fromCallable([$this, '_rejoinUntilConnected']);
+        $this->rejoinTimer = new Timer($this->socket->reconnectAfterMs, \Closure::bind($closure, $this));
         $this->joinPush->receive('ok', function () {
-            $this->state = Constants::CHANNEL_STATES['joined'];
+            $this->state = Constants::$CHANNEL_STATES['joined'];
             $this->rejoinTimer->reset();
             foreach($this->pushBuffer as $pushEvent) {
                 $pushEvent->send();
             }
             $this->pushBuffer = [];
         });
-        $this->onClose(function ($reason) {
+        $this->_onClose(function ($reason) {
             $this->rejoinTimer->reset();
             $this->socket->log('channel', 'close', $this->topic, $reason);
-            $this->state = Constants::CHANNEL_STATES['closed'];
+            $this->state = Constants::$CHANNEL_STATES['closed'];
             $this->socket->remove($this);
         });
     }
 
-    function subscribe($cb, $timeout) {
+    function subscribe($cb = null, $timeout = null) {
+
+        if(!$cb) {
+            $cb = function () {};
+        }
+
+        if(!$timeout) {
+            $timeout = $this->timeout;
+        }
+
         if($this->joinedOnce) {
             throw new Exception('tried to subscribe multiple times. \'subscribe\' can only be called a single time per channel instance');
         }
-        $broadcast = $this->params->config->broadcast;
-        $presence = $this->params->config->presence;
+
+        $broadcast = $this->params['config']['broadcast'];
+        $presence = $this->params['config']['presence'];
 
         $this->_onError(function ($reason) {
 
@@ -78,23 +95,31 @@ class RealtimeChannel
             $cb('CLOSED', $reason);
         });
 
+        $postgresChanges = [];
+
+        if(isset($this->bindings['postgres_changes'])) {
+            foreach($this->bindings['postgres_changes'] as $change) {
+                array_push($postgresChanges, $change['filter']);
+            }
+        }
+
         $config = [
             'broadcast' => $broadcast,
             'presence' => $presence,
-            'postgres_changes' => $this->params->config->postgres_changes
+            'postgres_changes' => $postgresChanges
         ];
 
-        $accessTokenPayload;
+        $accessTokenPayload = [];
 
-        if ($this->socket->accessToken) {
-            $accessTokenPayload = $this->socket->accessToken;
+        if (isset($this->socket->accessToken)) {
+            $accessTokenPayload['access_token'] = $this->socket->accessToken;
         }
 
         $this->updateJoinPayload(array_merge($config, $accessTokenPayload));
 
         $this->joinedOnce = true;
 
-        $this->rejoin($timeout);
+        $this->_rejoin($timeout);
 
         $this->joinPush->receive('ok', function($serverPostgresFilters){
             if($this->socket->accessToken) {
@@ -193,26 +218,21 @@ class RealtimeChannel
         return $res;
     }
 
-    function unsubscribe($timeout = $this->timeout) {
-        $this->state = Constants::CHANNEL_STATES['leaving'];
-        
-    }
-
-    function updateJoinPayload($payload) {
-        $this->joinPush->updatePayload($payload);
+    function unsubscribe($timeout) {
+        if(!isset($timeout)) {
+            $timeout = $this->timeout;
+        }
+        $this->state = Constants::$CHANNEL_STATES['leaving'];
 
         $onClose = function() {
             $this->socket->log('channel', 'leave ' . $this->topic);
-            $this->_trigger(Constants::CHANNEL_EVENTS['close'], 'leave', $this->_joinRef());
+            $this->_trigger(Constants::$CHANNEL_EVENTS['close'], 'leave', $this->_joinRef());
         };
 
         $this->rejoinTimer->reset();
-
         $this->joinPush->destroy();
 
-        $leavePush = new Push($this, Constants::CHANNEL_EVENTS['leave'], [], $timeout);
-
-        $res
+        $leavePush = new Push($this, Constants::$CHANNEL_EVENTS['leave'], [], $timeout);
 
         $leavePush->receive('ok', function() {
             $onClose();
@@ -226,19 +246,63 @@ class RealtimeChannel
 
         $leavePush->receive('error', function() {
             $res = 'error';
-        })
+        });
 
         $leavePush->send();
 
         if(!$this->_canPush()) {
-            $leavePush->trigger('ok', {});
+            $leavePush->trigger('ok', []);
         }
+        
+    }
 
-        return $res;
+    function updateJoinPayload($payload) {
+        $this->joinPush->updatePayload($payload);
+
+        // $onClose = function() {
+        //     $this->socket->log('channel', 'leave ' . $this->topic);
+        //     $this->_trigger(Constants::$CHANNEL_EVENTS['close'], 'leave', $this->_joinRef());
+        // };
+
+        // $this->rejoinTimer->reset();
+
+        // $this->joinPush->destroy();
+
+        // $leavePush = new Push($this, Constants::$CHANNEL_EVENTS['leave'], [], $timeout);
+
+        // $leavePush->receive('ok', function() {
+        //     $onClose();
+        //     $res = 'ok';
+        // });
+
+        // $leavePush->receive('timeout', function() {
+        //     $onClose();
+        //     $res = 'timeout';
+        // });
+
+        // $leavePush->receive('error', function() {
+        //     $res = 'error';
+        // });
+
+        // $leavePush->send();
+
+        // if(!$this->_canPush()) {
+        //     $leavePush->trigger('ok', []);
+        // }
+
+        // return $res;
 
     }
 
-    private _push($event, $payload, $timeout) {
+    private function _rejoinUntilConnected() {
+        $this->rejoinTimer->scheduleTimeout();
+
+        if($this->socket->isConnected()) {
+            $this->_rejoin();
+        }
+    }
+
+    private function _push($event, $payload, $timeout) {
         if(!$this->joinedOnce) {
             throw new Exception('tried to push \'' . $event . '\' to \'' . $this->topic . '\' before joining. Use channel.subscribe() before pushing events');
         }
@@ -255,30 +319,31 @@ class RealtimeChannel
         return $pushEvent;
     }
 
-    private _onMessage($_event, $payload) {
+    private function _onMessage($_event, $payload) {
         return $payload;
     }
 
-    private _isMember($topic) {
+    private function _isMember($topic) {
         return $this->topic === $topic;
     }
 
-    private _joinRef() {
+    function _joinRef() {
         return $this->joinPush->ref;
     }
 
-    private _trigger($type, $payload, $ref) {
+    function _trigger($type, $payload, $ref = null) {
         $typeLower = strtolower($type);
-        $close = Constants::CHANNEL_EVENTS['close'];
-        $error = Constants::CHANNEL_EVENTS['error'];
-        $leave = Constants::CHANNEL_EVENTS['leave'];
-        $join = Constants::CHANNEL_EVENTS['join'];
+        $close = Constants::$CHANNEL_EVENTS['close'];
+        $error = Constants::$CHANNEL_EVENTS['error'];
+        $leave = Constants::$CHANNEL_EVENTS['leave'];
+        $join = Constants::$CHANNEL_EVENTS['join'];
 
         $events = [$close, $error, $leave, $join];
 
         if($ref && in_array($typeLower, $events) && $ref != $this->_joinRef()) {
-            return
+            return;
         }
+
         $handledPayload = $this->_onMessage($typeLower, $payload);
 
         if($payload && !$handledPayload) {
@@ -343,23 +408,23 @@ class RealtimeChannel
         }
     }
 
-    private _isClosed() {
-        return $this->state === Constants::CHANNEL_STATES['closed'];
+    function _isClosed() {
+        return $this->state === Constants::$CHANNEL_STATES['closed'];
     }
 
-    private _isJoined() {
-        return $this->state === Constants::CHANNEL_STATES['joined'];
+    function _isJoined() {
+        return $this->state === Constants::$CHANNEL_STATES['joined'];
     }
 
-    private function _isJoining() {
-        return $this->state === Constants::CHANNEL_STATES['joining'];
+    function _isJoining() {
+        return $this->state === Constants::$CHANNEL_STATES['joining'];
     }
 
-    private function _isLeaving() {
-        return $this->state === Constants::CHANNEL_STATES['leaving'];
+    function _isLeaving() {
+        return $this->state === Constants::$CHANNEL_STATES['leaving'];
     }
 
-    private function _replyEventName($ref) {
+    function _replyEventName($ref) {
         return 'chan_reply_' . $ref;
     }
 
@@ -370,9 +435,9 @@ class RealtimeChannel
             'type' => $_type,
             'filter' => $filter,
             'callback' => $cb
-        ]
+        ];
 
-        if ($this->bindings[$_type] == null) {
+        if (isset($this->bindings[$_type])) {
             array_push($this->bindings[$_type], $binding);
         } else {
             $this->bindings[$_type] = [$binding];
@@ -396,13 +461,13 @@ class RealtimeChannel
     }
 
     private function _onError($cb){
-        $this->on(Constants::CHANNEL_EVENTS['error'], [], function ($reason) {
+        $this->on(Constants::$CHANNEL_EVENTS['error'], [], function ($reason) {
             $cb($reason);
         });
     }
 
     private function _onClose($cb){
-        $this->on(Constants::CHANNEL_EVENTS['close'], [], function ($reason) {
+        $this->on(Constants::$CHANNEL_EVENTS['close'], [], function ($reason) {
             $cb($reason);
         });
     }
@@ -411,17 +476,22 @@ class RealtimeChannel
         return $this->socket->isConnected() && $this->_isJoined();
     }
 
-    private function _rejoin($timeout = $this->timeout){
+    private function _rejoin($timeout){
+
+        if(!isset($timeout)){
+            $timeout = $this->timeout;
+        }
+
         if($this->_isLeaving()){
             return;
         }
 
-        $this->socket->leaveOpenTopic($this->topic);
-        $this->state = Constants::CHANNEL_STATES['joining'];
+        $this->socket->_leaveOpenTopic($this->topic);
+        $this->state = Constants::$CHANNEL_STATES['joining'];
         $this->joinPush->resend($timeout);
     }
 
-    private _getPayloadRecords($payload) {
+    private function _getPayloadRecords($payload) {
         $records = [
             'new' => [],
             'old' => []

@@ -8,7 +8,7 @@ class Push
 	public $timeoutTimer;
 	public $ref;
 	public $result;
-	public $hooks;
+	public $hooks = [];
 	public $refEvent;
 	public $rateLimited = false;
 
@@ -25,7 +25,7 @@ class Push
 		$this->timeout = $timeout;
 	}
 
-	public function resemd($timeout)
+	public function resend($timeout)
 	{
 		$this->timeout = $timeout;
 		$this::_cancelRefEvent();
@@ -45,12 +45,12 @@ class Push
 		$this->startTimeout();
 		$this->sent = true;
 
-		$status = $this->channel->socket->send([
+		$status = $this->channel->socket->push([
 			'topic' => $this->channel->topic,
 			'event' => $this->event,
 			'payload' => $this->payload,
 			'ref' => $this->ref,
-			'join_ref' => $this->channel->joinRef(),
+			'join_ref' => $this->channel->_joinRef(),
 		]);
 
 		if ($status = 'rate limited') {
@@ -80,8 +80,8 @@ class Push
 			return;
 		}
 
-		$this->ref = $this->channel->socket->makeRef();
-		$this->refEvent = $this->channel->replaceEventName($this->ref);
+		$this->ref = $this->channel->socket->_makeRef();
+		$this->refEvent = $this->channel->_replyEventName($this->ref);
 
 		$fn = function ($payload) {
 			$this->destroy();
@@ -107,7 +107,7 @@ class Push
 	public function trigger($status, $response)
 	{
 		if ($this->refEvent) {
-			$this->channel->trigger($this->refEvent, ['status' => $status, 'response' => $response]);
+			$this->channel->_trigger($this->refEvent, ['status' => $status, 'response' => $response]);
 		}
 	}
 
