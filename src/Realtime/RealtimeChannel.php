@@ -183,7 +183,7 @@ class RealtimeChannel
 
             $cb('SUBSCRIBED');
         } elseif($response->payload->status == 'error') {
-            $cb('CHANNEL_ERROR', $response->payload->response->reason);
+            $cb('CHANNEL_ERROR', $response->payload->response['reason']);
         } else {
             $cb('CHANNEL_ERROR', 'unknown error');
         }

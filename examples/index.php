@@ -3,16 +3,17 @@
     use Supabase\Realtime\RealtimeClient;
     use React\EventLoop\Loop;
 
-    $options = [
-        'headers' => [
-            'apikey' => $apiKey
-        ],
-        'eventsPerSecond' => '10' 
-    ];
+	include __DIR__.'/header.php';
+	use Supabase\Realtime\RealtimeClient;
 
-    $socket = new RealtimeClient($endpoint, $options);
+	$options = [
+		'headers' => [
+			'apikey' => $apiKey,
+		],
+		'eventsPerSecond' => '10',
+	];
 
-    $socket->connect();
+	$socket = new RealtimeClient($endpoint, $options);
 
     $channel = $socket->channel('realtime:public'); // Also tried realtime:db-messages
 
@@ -47,15 +48,17 @@
 
     
 
-    // $channel->on('UPDATE', null, function($payload) {
-    //     echo 'UPDATE: ' . $payload['new']['id'] . PHP_EOL;
-    // });
+	// $channel->on('INSERT', null, function($payload) {
+	//     echo 'INSERT: ' . $payload['new']['id'] . PHP_EOL;
+	// });
 
-    // $channel->on('DELETE', null, function($payload) {
-    //     echo 'DELETE: ' . $payload['old']['id'] . PHP_EOL;
-    // });
+	// $channel->on('UPDATE', null, function($payload) {
+	//     echo 'UPDATE: ' . $payload['new']['id'] . PHP_EOL;
+	// });
 
-    // $channel->subscribe();
+	// $channel->on('DELETE', null, function($payload) {
+	//     echo 'DELETE: ' . $payload['old']['id'] . PHP_EOL;
+	// });
 
     $channel->unsubscribe();
 
