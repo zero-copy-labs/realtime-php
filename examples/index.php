@@ -1,7 +1,8 @@
 <?php
-    include __DIR__.'/header.php';
-    use Supabase\Realtime\RealtimeClient;
-    use React\EventLoop\Loop;
+
+	include __DIR__.'/header.php';
+	use React\EventLoop\Loop;
+	use Supabase\Realtime\RealtimeClient;
 
 	include __DIR__.'/header.php';
 	use Supabase\Realtime\RealtimeClient;
@@ -15,38 +16,35 @@
 
 	$socket = new RealtimeClient($endpoint, $options);
 
-    $channel = $socket->channel('realtime:public'); // Also tried realtime:db-messages
+	$channel = $socket->channel('realtime:public'); // Also tried realtime:db-messages
 
-    $channel->on('postgres_changes', [
-        'event' => 'INSERT',
-        'schema' => 'public',
-        'table' => 'auth_token',
-    ], function($payload) {
-        echo 'INSERT: ' . $payload['new']['id'] . PHP_EOL;
-    });
+	$channel->on('postgres_changes', [
+		'event' => 'INSERT',
+		'schema' => 'public',
+		'table' => 'auth_token',
+	], function ($payload) {
+		echo 'INSERT: '.$payload['new']['id'].PHP_EOL;
+	});
 
-    $channel->subscribe(function($payload) {
-        echo $payload . PHP_EOL;
-    });
+	$channel->subscribe(function ($payload) {
+		echo $payload.PHP_EOL;
+	});
 
+	$loop = Loop::addPeriodicTimer(10, function () use ($socket) {
+		$messages = $socket->conn->receive();
 
-    $loop = Loop::addPeriodicTimer(10, function() use ($socket) {
-        $messages = $socket->conn->receive();
+		if (! $messages) {
+			echo 'No messages'.PHP_EOL;
 
-        if (!$messages) {
-            echo 'No messages' . PHP_EOL;
-            return;
-        }
-        
-        foreach($messages as $message) {
-            echo 'message: ' . $message->getPayload() . PHP_EOL;
-        }
+			return;
+		}
 
-    });
+		foreach ($messages as $message) {
+			echo 'message: '.$message->getPayload().PHP_EOL;
+		}
+	});
 
-    Loop::run();
-
-    
+	Loop::run();
 
 	// $channel->on('INSERT', null, function($payload) {
 	//     echo 'INSERT: ' . $payload['new']['id'] . PHP_EOL;
@@ -60,6 +58,6 @@
 	//     echo 'DELETE: ' . $payload['old']['id'] . PHP_EOL;
 	// });
 
-    $channel->unsubscribe();
+	$channel->unsubscribe();
 
-    Loop::cancelTimer($loop);
+	Loop::cancelTimer($loop);
