@@ -3,9 +3,6 @@
     use Supabase\Realtime\RealtimeClient;
     use React\EventLoop\Loop;
 
-	include __DIR__.'/header.php';
-	use Supabase\Realtime\RealtimeClient;
-
 	$options = [
 		'headers' => [
 			'apikey' => $apiKey,
@@ -15,7 +12,7 @@
 
 	$socket = new RealtimeClient($endpoint, $options);
 
-    $channel = $socket->channel('realtime:public'); // Also tried realtime:db-messages
+    $channel = $socket->channel('realtime:supabase_realtime'); // Also tried realtime:db-messages
 
     $channel->on('postgres_changes', [
         'event' => 'INSERT',
