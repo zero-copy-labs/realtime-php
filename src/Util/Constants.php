@@ -50,7 +50,7 @@ class Constants
 	public static function getDefaultHeaders()
 	{
 		return [
-			'X-Client-Info' => 'storage-php/'.self::$VERSION,
+			'X-Client-Info' => 'realtime-php/'.self::$VERSION,
 		];
 	}
 }

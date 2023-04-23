@@ -18,6 +18,7 @@ class RealtimeChannel
     public $rejoinTimer;
     public $pushBuffer = [];
     public $presence;
+    public $topic;
 
     function __construct($topic, $params = ['config' => []], $socket)
     {
@@ -43,8 +44,7 @@ class RealtimeChannel
 
         $this->timeout = $this->socket->timeout;
         $this->joinPush = new Push($this, Constants::$CHANNEL_EVENTS['join'], $this->params, $this->timeout);
-        $closure = \Closure::fromCallable([$this, '_rejoinUntilConnected']);
-        $this->rejoinTimer = new Timer($this->socket->reconnectAfterMs, \Closure::bind($closure, $this));
+        $this->rejoinTimer = new Timer();
         $this->joinPush->receive('ok', function () {
             $this->state = Constants::$CHANNEL_STATES['joined'];
             $this->rejoinTimer->reset();
@@ -53,11 +53,24 @@ class RealtimeChannel
             }
             $this->pushBuffer = [];
         });
+        $this->_onError(function ($reason) {
+            if($this->isLeaving() || $this->isClosed()) {
+                return;
+            }
+
+            $this->socket->log('channel', 'error', $this->topic, $reason);
+            $this->state = Constants::$CHANNEL_STATES['errored'];
+            $this->rejoinTimer->schedule(function() {
+                $this->_rejoinUntilConnected();
+            }, function($tries) {
+                $this->socket->reconnectAfterMs($tries);
+            });
+        });
         $this->_onClose(function ($reason) {
             $this->rejoinTimer->reset();
             $this->socket->log('channel', 'close', $this->topic, $reason);
             $this->state = Constants::$CHANNEL_STATES['closed'];
-            $this->socket->remove($this);
+            $this->socket->_remove($this);
         });
     }
 
@@ -78,7 +91,7 @@ class RealtimeChannel
         $broadcast = $this->params['config']['broadcast'];
         $presence = $this->params['config']['presence'];
 
-        $this->_onError(function ($reason) {
+        $this->_onError(function ($reason) use($cb) {
 
             if(!$cb) {
                 return;
@@ -87,7 +100,8 @@ class RealtimeChannel
             $cb('CHANNEL_ERROR', $reason);
         });
 
-        $this->_onClose(function ($reason) {
+        $this->_onClose(function ($reason) use($cb) {
+            throw new Exception('channel closed', $reason);
             if(!$cb) {
                 return;
             }
@@ -121,12 +135,18 @@ class RealtimeChannel
 
         $this->_rejoin($timeout);
 
-        $this->joinPush->receive('ok', function($serverPostgresFilters){
-            if($this->socket->accessToken) {
+        $r = $this->socket->conn->receive()[0]->getPayload();
+
+        $response = json_decode($r);
+
+        if($response->payload->status == 'ok') {
+            if(isset($this->socket->accessToken)) {
                 $this->socket->setAuth($this->socket->accessToken);
             }
 
-            if ($serverPostgresFilters == null) {
+            $serverPostgresFilters = $response->payload->response->postgres_changes;
+
+            if ($serverPostgresFilters == null || count($serverPostgresFilters) == 0) {
                 $cb && $cb('SUBSCRIBED');
                 return;
             }
@@ -161,16 +181,12 @@ class RealtimeChannel
 
             $this->bindings->postgres_changes = $newPostgresBindings;
 
-            $cb && $cb('SUBSCRIBED');
-
-            return;
-        })->receive('error', function($reason){
-            $cb && $cb('CHANNEL_ERROR', $reason);
-            return;
-        })->receive('timeout', function(){
-            $cb && $cb('TIMED_OUT');
-            return;
-        });
+            $cb('SUBSCRIBED');
+        } elseif($response->payload->status == 'error') {
+            $cb('CHANNEL_ERROR', $response->payload->response->reason);
+        } else {
+            $cb('CHANNEL_ERROR', 'unknown error');
+        }
 
         return $this;
 
@@ -193,6 +209,15 @@ class RealtimeChannel
 
     function on($type, $filter, $cb) {
         return $this->_on($type, $filter, $cb);
+    }
+
+    function _off($type, $filter) {
+
+        $typeLower = strtolower($type);
+        
+        $this->bindings[$typeLower] = array_filter($this->bindings[$typeLower], function($binding) use ($filter, $typeLower) {
+            return strtolower($binding['type']) == $typeLower && $this->isEqual($binding['filter'], $filter);
+        });
     }
 
     function send($payload, $options) {
@@ -218,7 +243,7 @@ class RealtimeChannel
         return $res;
     }
 
-    function unsubscribe($timeout) {
+    function unsubscribe($timeout = null) {
         if(!isset($timeout)) {
             $timeout = $this->timeout;
         }
@@ -234,12 +259,12 @@ class RealtimeChannel
 
         $leavePush = new Push($this, Constants::$CHANNEL_EVENTS['leave'], [], $timeout);
 
-        $leavePush->receive('ok', function() {
+        $leavePush->receive('ok', function() use ($onClose) {
             $onClose();
             $res = 'ok';
         });
 
-        $leavePush->receive('timeout', function() {
+        $leavePush->receive('timeout', function() use ($onClose) {
             $onClose();
             $res = 'timeout';
         });
@@ -295,7 +320,12 @@ class RealtimeChannel
     }
 
     private function _rejoinUntilConnected() {
-        $this->rejoinTimer->scheduleTimeout();
+        echo 'rejoin until connected';
+        $this->rejoinTimer->scheduleTimeout(function() {
+            $this->_rejoinUntilConnected();
+        }, function($tries) {
+            $this->socket->reconnectAfterMs($tries);
+        });
 
         if($this->socket->isConnected()) {
             $this->_rejoin();
@@ -353,7 +383,7 @@ class RealtimeChannel
         $types = ['insert', 'update', 'delete'];
 
         if(in_array($typeLower, $types)) {
-            $applicableBindings = array_filter($this->bindings->postgres_changes, function($binding) {
+            $applicableBindings = array_filter($this->bindings->postgres_changes, function($binding) use ($typeLower) {
                 return $binding['filter']['event'] == $typeLower;
             });
 
@@ -363,16 +393,16 @@ class RealtimeChannel
             return;
         }
 
-        $applicableBindings = array_filter($this->bindings[$typeLower], function($binding) {
+        $applicableBindings = array_filter($this->bindings[$typeLower], function($binding) use ($typeLower, $payload) {
             if(in_array($typeLower, ['broadcast', 'presence', 'postgres_changes'])) {
 
-                $bindEvent = strtolower($binding->filter->event);
-                $payloadType = strtolower($payload->type);
+                $bindEvent = strtolower($binding['filter']['event']);
+                $payloadType = strtolower($payload['type']);
 
                 if($binding['id']) {
                     $bindId = $binding['id'];
-                    $bindEvent = $binding->filter->event;
-                    return $bindId && in_array($bindId, $payload->ids) && (
+                    $bindEvent = $binding['filter']['event'];
+                    return $bindId && in_array($bindId, $payload['ids']) && (
                         $bindEvent == '*' || $bindEvent == $payloadType
                     );
                 }
@@ -380,28 +410,32 @@ class RealtimeChannel
                 return $bindEvent == '*' || $bindEvent == $payloadType;
             }
 
-            return strtolower($binding->type) == $typeLower;
+            return strtolower($binding['type']) == $typeLower;
         });
 
+
         foreach($applicableBindings as $binding) {
-            $postgresChanges = $handledPayload->data;
-            $schema = $postgresChanges['schema'];
-            $table = $postgresChanges['table'];
-            $commit_timestamp = $postgresChanges['commit_timestamp'];
-            $type = $postgresChanges['type'];
-            $errors = $postgresChanges['errors'];
+            if(isset($handledPayload['ids'])){
+                $postgresChanges = $handledPayload['data'];
+                $schema = $postgresChanges['schema'];
+                $table = $postgresChanges['table'];
+                $commit_timestamp = $postgresChanges['commit_timestamp'];
+                $type = $postgresChanges['type'];
+                $errors = $postgresChanges['errors'];
 
-            $_payload = [
-                'schema' => $schema,
-                'table' => $table,
-                'commit_timestamp' => $commit_timestamp,
-                'type' => $type,
-                'errors' => $errors,
-                'new' => [],
-                'old' => [],
-            ];
+                $_payload = [
+                    'schema' => $schema,
+                    'table' => $table,
+                    'commit_timestamp' => $commit_timestamp,
+                    'type' => $type,
+                    'errors' => $errors,
+                    'new' => [],
+                    'old' => [],
+                ];
 
-            $handledPayload = array_merge($_payload, $this._getPayloadRecords($postgresChanges));
+                $handledPayload = array_merge($_payload, $this._getPayloadRecords($postgresChanges));
+            }
+            
 
             $binding['callback']($handledPayload, $ref);
 
@@ -446,16 +480,6 @@ class RealtimeChannel
         return $this;
     }
 
-    private function _off($type, $filter) {
-        $_type = strtolower($type);
-
-        $this->bindings[$_type] = $this->bindings[$_type].filter(function ($bind) {
-            return !self::isEqual($bind['event'], $filter);
-        });
-
-        return $this;
-    }
-
     private static function isEqual($a, $b){
         return count(array_diff_assoc($a, $b)) == 0;
     }
@@ -467,7 +491,7 @@ class RealtimeChannel
     }
 
     private function _onClose($cb){
-        $this->on(Constants::$CHANNEL_EVENTS['close'], [], function ($reason) {
+        $this->on(Constants::$CHANNEL_EVENTS['close'], [], function ($reason) use($cb) {
             $cb($reason);
         });
     }
@@ -476,7 +500,7 @@ class RealtimeChannel
         return $this->socket->isConnected() && $this->_isJoined();
     }
 
-    private function _rejoin($timeout){
+    private function _rejoin($timeout = null){
 
         if(!isset($timeout)){
             $timeout = $this->timeout;

@@ -86,16 +86,16 @@ class Push
 		$fn = function ($payload) {
 			$this->destroy();
 			$this->result = $payload;
-			$this->matchResult($payload);
+			$this->_matchResult($payload);
 		};
 
 		$refEvent = $this->refEvent;
 
 		$this->channel->on($refEvent, [], $fn);
 
-		$this->timeoutTimer = new Timer($this->timeout, function () {
+		$this->timeoutTimer = new Timer(function () {
 			$this->trigger('timeout', []);
-		});
+		}, $this->timeout);
 	}
 
 	public function destroy()
@@ -117,7 +117,7 @@ class Push
 			return;
 		}
 
-		$this->channel->off($this->refEvent);
+		$this->channel->_off($this->refEvent, []);
 	}
 
 	private function _cancelTimeout()
@@ -127,6 +127,7 @@ class Push
 
 	private function _matchResult($result)
 	{
+
 		$status = $result['status'];
 		$response = $result['response'];
 

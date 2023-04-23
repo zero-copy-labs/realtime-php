@@ -5,6 +5,7 @@ namespace Supabase\Realtime;
 use Wrench\Client;
 
 use Supabase\Util\Constants;
+use Supabase\Util\Timer;
 
 class RealtimeClient
 {
@@ -64,6 +65,16 @@ class RealtimeClient
         if(isset($options->params['eventsPerSecond'])) {
             $this->eventsPerSecondLimitMs = 1000 / $options->params['eventsPerSecond'];
         }
+
+        $this->heartbeatTimer = new Timer();
+
+        $reconnectAfterMs = $this->reconnectAfterMs;
+
+        $this->reconnectTimer = new Timer();
+    }
+
+    public function reconnectAfterMs($tries) {
+        return [1000, 2000, 5000, 10000][$tries - 1] ?? 10000;
     }
 
     public function connect() {
@@ -89,8 +100,7 @@ class RealtimeClient
         $this->conn->connect();
 
         if($this->conn->isConnected()) {
-            echo $this->conn->receive();
-            // $this->conn->on('onopen', $this->_onConnOpen());
+            $this->_onConnOpen();
         }
     }
 
@@ -102,7 +112,7 @@ class RealtimeClient
         $this->conn->disconnect();
 
         $this->conn = null;
-        $this->heartbeatTime = null;
+        $this->heartbeatTimer->reset();
         $this->reconnectTimer->reset();
     }
 
@@ -127,7 +137,7 @@ class RealtimeClient
     }
 
     public function log($kind, $message, $data = null) {
-        echo $kind . ' ' . $message . ' ' . json_encode($data);
+        echo $kind . ' ' . $message . ' ' . json_encode($data) . PHP_EOL;;
     }
 
     public function connectionState() {
@@ -144,6 +154,9 @@ class RealtimeClient
     }
 
     public function isConnected() {
+
+        if(!isset($this->conn)) return false;
+
         return $this->conn->isConnected();
     }
 
@@ -163,9 +176,9 @@ class RealtimeClient
         $payload = $data['payload'];
         $ref = $data['ref'];
 
-        $callback = function() {
+        $callback = function() use ($data) {
             $result = json_encode($data);
-            $this->conn->send($result);
+            $this->conn->sendData($result);
         };
 
         $this->log('push', "{$topic} {$event} ({$ref})", $payload);
@@ -175,9 +188,13 @@ class RealtimeClient
                 $isThrottled = $this._throttle($callback)();
                 if($isThrottled) {
                     return 'rate limited';
-                } else $callback();
+                }
+            } else {
+                $callback();
             }
-        } else $this->sendBuffer->push($callback);
+        } else {
+            array_push($this->sendBuffer, $callback);
+        };
     }
 
     public function setAuth($token) {
@@ -187,7 +204,7 @@ class RealtimeClient
             $channel->updateJoinPayload(['access_token' => $token]);
 
             if($channel->joinedOnce() && $channel->_isJoined()) {
-                $channel->_pusdh(Constants::$CHANNEL_EVENTS['access_token'], ['access_token' => $token]);
+                $channel->_push(Constants::$CHANNEL_EVENTS['access_token'], ['access_token' => $token]);
             }
         }
     }
@@ -259,17 +276,21 @@ class RealtimeClient
     }
 
     private function _onConnOpen() {
-        $this->log('transport', 'connected to ' . $this->endPointURL());
+        // $this->log('transport', 'connected to ' . $this->_endPointURL());
 
-        $this->flushSendBuffer();
+        $this->_flushSendBuffer();
         $this->reconnectTimer->reset();
 
         if(!$this->isConnected()) {
             $this->conn->close();
             return;
         }
-
-        $this->heartbeatTimer->start();
+        $this->heartbeatTimer->reset();
+        $this->heartbeatTimer->interval(function() {
+            $this->_sendHeartbeat();
+        },  function() {
+            return $this->heartbeatIntervalMs;
+        });
         foreach($this->stateChangeCallbacks['open'] as $callback) {
             $callback();
         }
@@ -279,7 +300,14 @@ class RealtimeClient
         $this->log('transport', 'close', $event);
         $this->triggerChanError();
         $this->heartbeatTimer->reset();
-        $this->reconnectTimer->start();
+        $this->reconnectTimer->scheduleTimeout(
+            function() {
+                $this->disconnect();
+                $this->connect();
+            }, function($tries) {
+                return $this->reconnectAfterMs($tries);
+            }
+        );
         foreach($this->stateChangeCallbacks['close'] as $callback) {
             $callback($event);
         }
@@ -330,7 +358,10 @@ class RealtimeClient
             'payload' => [],
             'ref' => $this->pendingHeartbeatRef
         ]);
-        $this->setAuth($this->accessToken);
+
+        if(isset($this->accessToken)) {
+            $this->setAuth($this->accessToken);
+        }
     }
 
     private function _throttle($callback, $eventsPerSecondLimitMs) {
