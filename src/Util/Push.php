@@ -132,7 +132,6 @@ class Push
 
 	private function _matchResult($result)
 	{
-
 		$status = $result['status'];
 		$response = $result['response'];
 
