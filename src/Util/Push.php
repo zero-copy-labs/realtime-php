@@ -91,11 +91,16 @@ class Push
 
 		$refEvent = $this->refEvent;
 
+		echo 'Pushing to channel: ' . $refEvent . PHP_EOL;
+
 		$this->channel->on($refEvent, [], $fn);
 
-		$this->timeoutTimer = new Timer(function () {
+		$this->timeoutTimer = new Timer();
+		$this->timeoutTimer->schedule(function () use ($refEvent) {
 			$this->trigger('timeout', []);
-		}, $this->timeout);
+		}, function () {
+			return $this->timeout;
+		});
 	}
 
 	public function destroy()

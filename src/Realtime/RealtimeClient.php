@@ -6,6 +6,7 @@ use Wrench\Client;
 
 use Supabase\Util\Constants;
 use Supabase\Util\Timer;
+use React\EventLoop\Loop;
 
 class RealtimeClient
 {
@@ -17,6 +18,7 @@ class RealtimeClient
     public int $timeout;
     //$transport = ;
     public int $heartbeatIntervalMs = 30000;
+    public int $refreshRate = 1;
     public $heartbeatTimer;
     public $pendingHeartbeatRef;
     public int $ref = 0;
@@ -35,6 +37,8 @@ class RealtimeClient
     public bool $inThrottle = false;
 
     public array $events = ['broadcast', 'presence', 'postgres_changes'];
+
+    private $loop;
 
     public function __construct($endpoint, $options)
     {
@@ -240,6 +244,10 @@ class RealtimeClient
         }
     }
 
+    function startReceiver() {
+        $this->_startReceiver();
+    }
+
     private function _endPointURL() {
         return $this->_appendParams(
             $this->endpoint,
@@ -252,21 +260,22 @@ class RealtimeClient
     }
 
     private function _onConnMessage($raw) {
-        $msg = $json_decode($msg);
-        $topic = $msg['topic'];
-        $event = $msg['event'];
-        $payload = $msg['payload'];
-        $ref = $msg['ref'];
+        $msg = json_decode($raw);
+        
+        $topic = $msg->topic;
+        $event = $msg->event;
+        $payload = $msg->payload;
+        $ref = $msg->ref;
 
-        if($ref && $ref == $this->pendingHeartbeatRef || $event == $payload->type) {
+        if($ref && $ref == $this->pendingHeartbeatRef || (isset($payload->type) && $event == $payload->type)) {
             $this->pendingHeartbeatRef = null;
         }
 
         $this->log('receive', "{$topic} {$event} {$ref}", $payload);
 
         foreach($this->channels as $channel) {
-            if($channel->isMember($topic)) {
-                $channel->trigger($event, $payload, ref, $raw);
+            if($channel->_isMember($topic)) {
+                $channel->_trigger($event, $payload, $ref, $raw);
             }
         }
 
@@ -276,7 +285,7 @@ class RealtimeClient
     }
 
     private function _onConnOpen() {
-        // $this->log('transport', 'connected to ' . $this->_endPointURL());
+        $this->log('transport', 'connected to ' . $this->_endPointURL());
 
         $this->_flushSendBuffer();
         $this->reconnectTimer->reset();
@@ -298,6 +307,9 @@ class RealtimeClient
 
     private function _onConnClose($event) {
         $this->log('transport', 'close', $event);
+        if($this->loop) {
+            $this->_stopReceiver();
+        }
         $this->triggerChanError();
         $this->heartbeatTimer->reset();
         $this->reconnectTimer->scheduleTimeout(
@@ -378,5 +390,30 @@ class RealtimeClient
 
             return false;
         };
+    }
+
+    private function _startReceiver() {
+        $this->loop = Loop::addPeriodicTimer($this->refreshRate, function() {
+            $messages = $this->conn->receive();
+
+            echo 'Checking...';
+    
+            if (!$messages) {
+                return;
+            }
+            
+            foreach($messages as $message) {
+                echo $message->getPayload();
+                $this->_onConnMessage($message->getPayload());
+            }
+    
+        });
+    
+        Loop::run();
+    }
+
+    private function _stopReceiver() {
+        Loop::cancelTimer($this->$loop);
+        $this->loop = null;
     }
 }

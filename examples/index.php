@@ -1,7 +1,6 @@
 <?php
     include __DIR__.'/header.php';
     use Supabase\Realtime\RealtimeClient;
-    use React\EventLoop\Loop;
 
 	$options = [
 		'headers' => [
@@ -12,7 +11,7 @@
 
 	$socket = new RealtimeClient($endpoint, $options);
 
-    $channel = $socket->channel('realtime:supabase_realtime'); // Also tried realtime:db-messages
+    $channel = $socket->channel('realtime:db-messages'); // Also tried realtime:db-messages
 
     $channel->on('postgres_changes', [
         'event' => 'INSERT',
@@ -26,24 +25,7 @@
         echo $payload . PHP_EOL;
     });
 
-
-    $loop = Loop::addPeriodicTimer(10, function() use ($socket) {
-        $messages = $socket->conn->receive();
-
-        if (!$messages) {
-            echo 'No messages' . PHP_EOL;
-            return;
-        }
-        
-        foreach($messages as $message) {
-            echo 'message: ' . $message->getPayload() . PHP_EOL;
-        }
-
-    });
-
-    Loop::run();
-
-    
+    $socket->startReceiver();
 
 	// $channel->on('INSERT', null, function($payload) {
 	//     echo 'INSERT: ' . $payload['new']['id'] . PHP_EOL;
@@ -58,5 +40,3 @@
 	// });
 
     $channel->unsubscribe();
-
-    Loop::cancelTimer($loop);

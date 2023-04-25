@@ -14,7 +14,6 @@ class Timer
 
 	public function reset()
 	{
-		echo 'RESET' . PHP_EOL;
 		$this->tries = 0;
 		if(isset($this->timer)) {
 			Loop::cancelTimer($this->timer);
@@ -44,6 +43,7 @@ class Timer
 	public function interval($fn, $timeoutFn) {
 		$timeout = $timeoutFn() / 1000; // MS to Seconds
 		$timer = Loop::addPeriodicTimer($timeout, function() use($fn) {
+			echo 'Interval expired' . PHP_EOL;
 			$fn();
 		});
 	}

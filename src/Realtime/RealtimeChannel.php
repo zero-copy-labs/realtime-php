@@ -88,9 +88,6 @@ class RealtimeChannel
             throw new Exception('tried to subscribe multiple times. \'subscribe\' can only be called a single time per channel instance');
         }
 
-        $broadcast = $this->params['config']['broadcast'];
-        $presence = $this->params['config']['presence'];
-
         $this->_onError(function ($reason) use($cb) {
 
             if(!$cb) {
@@ -117,10 +114,12 @@ class RealtimeChannel
             }
         }
 
-        $config = [
-            'broadcast' => $broadcast,
-            'presence' => $presence,
-            'postgres_changes' => $postgresChanges
+        $payload = [
+            'config' => [
+                'broadcast' => $this->params['config']['broadcast'],
+                'postgres_changes' => $postgresChanges,
+                'presence' => $this->params['config']['presence']
+            ]
         ];
 
         $accessTokenPayload = [];
@@ -129,17 +128,13 @@ class RealtimeChannel
             $accessTokenPayload['access_token'] = $this->socket->accessToken;
         }
 
-        $this->updateJoinPayload(array_merge($config, $accessTokenPayload));
+        $this->updateJoinPayload(array_merge($payload, $accessTokenPayload));
 
         $this->joinedOnce = true;
 
         $this->_rejoin($timeout);
 
-        $r = $this->socket->conn->receive()[0]->getPayload();
-
-        $response = json_decode($r);
-
-        if($response->payload->status == 'ok') {
+        $this->joinPush->receive('ok', function() {
             if(isset($this->socket->accessToken)) {
                 $this->socket->setAuth($this->socket->accessToken);
             }
@@ -151,7 +146,7 @@ class RealtimeChannel
                 return;
             }
 
-            $clientPostgresBindings = $this->bindings->postgres_changes;
+            $clientPostgresBindings = $this->bindings['postgres_changes'];
             $bindingsLength = count($clientPostgresBindings);
             $newPostgresBindings = [];
 
@@ -160,33 +155,38 @@ class RealtimeChannel
                 $event = $clientPostgresBindings['filter']['event'];
                 $schema = $clientPostgresBindings['filter']['schema'];
                 $table = $clientPostgresBindings['filter']['table'];
-                $filter = $clientPostgresBindings['filter']['filter'];
+                $filter = isset($clientPostgresBindings['filter']['filter']) ? $clientPostgresBindings['filter']['filter'] : null;
 
                 $serverPostgresFilter = $serverPostgresFilters[$i];
+                $serverFilter = isset($serverPostgresFilter->filter) ? $serverPostgresFilter->filter : null;
 
                 if(
                     !$serverPostgresFilter
-                    || $serverPostgresFilter['event'] != $event
-                    || $serverPostgresFilter['schema'] != $schema
-                    || $serverPostgresFilter['table'] != $table
-                    || $serverPostgresFilter['filter'] != $filter    
+                    || $serverPostgresFilter->event != $event
+                    || $serverPostgresFilter->schema != $schema
+                    || $serverPostgresFilter->table != $table
+                    || $serverFilter != $filter    
                 ) {
                     $this->unsubscribe();
                     $cb && $cb('CHANNEL_ERROR', 'server and client binding does not match for postgres changes');
                     return;
                 }
 
-                array_push($newPostgresBindings, array_merge($clientPostgresBindings, ['id' => $serverPostgresFilter['id']]));
+                array_push($newPostgresBindings, array_merge($clientPostgresBindings, ['id' => $serverPostgresFilter->id]));
             }
 
-            $this->bindings->postgres_changes = $newPostgresBindings;
+            $this->bindings['postgres_changes'] = $newPostgresBindings;
 
             $cb('SUBSCRIBED');
-        } elseif($response->payload->status == 'error') {
-            $cb('CHANNEL_ERROR', $response->payload->response['reason']);
-        } else {
-            $cb('CHANNEL_ERROR', 'unknown error');
-        }
+        });
+
+        $this->joinPush->receive('error', function($err) {
+            $cb('CHANNEL_ERROR', $err);
+        });
+
+        $this->joinPush->receive('timeout', function() {
+            $cb('TIMED_OUT');
+        });
 
         return $this;
 
@@ -283,40 +283,6 @@ class RealtimeChannel
 
     function updateJoinPayload($payload) {
         $this->joinPush->updatePayload($payload);
-
-        // $onClose = function() {
-        //     $this->socket->log('channel', 'leave ' . $this->topic);
-        //     $this->_trigger(Constants::$CHANNEL_EVENTS['close'], 'leave', $this->_joinRef());
-        // };
-
-        // $this->rejoinTimer->reset();
-
-        // $this->joinPush->destroy();
-
-        // $leavePush = new Push($this, Constants::$CHANNEL_EVENTS['leave'], [], $timeout);
-
-        // $leavePush->receive('ok', function() {
-        //     $onClose();
-        //     $res = 'ok';
-        // });
-
-        // $leavePush->receive('timeout', function() {
-        //     $onClose();
-        //     $res = 'timeout';
-        // });
-
-        // $leavePush->receive('error', function() {
-        //     $res = 'error';
-        // });
-
-        // $leavePush->send();
-
-        // if(!$this->_canPush()) {
-        //     $leavePush->trigger('ok', []);
-        // }
-
-        // return $res;
-
     }
 
     private function _rejoinUntilConnected() {
@@ -353,7 +319,7 @@ class RealtimeChannel
         return $payload;
     }
 
-    private function _isMember($topic) {
+    function _isMember($topic) {
         return $this->topic === $topic;
     }
 
@@ -393,26 +359,29 @@ class RealtimeChannel
             return;
         }
 
-        $applicableBindings = array_filter($this->bindings[$typeLower], function($binding) use ($typeLower, $payload) {
-            if(in_array($typeLower, ['broadcast', 'presence', 'postgres_changes'])) {
+        $applicableBindings = [];
 
-                $bindEvent = strtolower($binding['filter']['event']);
-                $payloadType = strtolower($payload['type']);
-
-                if($binding['id']) {
-                    $bindId = $binding['id'];
-                    $bindEvent = $binding['filter']['event'];
-                    return $bindId && in_array($bindId, $payload['ids']) && (
-                        $bindEvent == '*' || $bindEvent == $payloadType
-                    );
+        if(isset($this->bindings[$typeLower]) && count($this->bindings[$typeLower]) > 0) {
+            $applicableBindings = array_filter($this->bindings[$typeLower], function($binding) use ($typeLower, $payload) {
+                if(in_array($typeLower, ['broadcast', 'presence', 'postgres_changes'])) {
+    
+                    $bindEvent = strtolower($binding['filter']['event']);
+                    $payloadType = strtolower($payload['type']);
+    
+                    if($binding['id']) {
+                        $bindId = $binding['id'];
+                        $bindEvent = $binding['filter']['event'];
+                        return $bindId && in_array($bindId, $payload['ids']) && (
+                            $bindEvent == '*' || $bindEvent == $payloadType
+                        );
+                    }
+    
+                    return $bindEvent == '*' || $bindEvent == $payloadType;
                 }
-
-                return $bindEvent == '*' || $bindEvent == $payloadType;
-            }
-
-            return strtolower($binding['type']) == $typeLower;
-        });
-
+    
+                return strtolower($binding['type']) == $typeLower;
+            });
+        }
 
         foreach($applicableBindings as $binding) {
             if(isset($handledPayload['ids'])){
