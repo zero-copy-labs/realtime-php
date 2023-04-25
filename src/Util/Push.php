@@ -91,12 +91,12 @@ class Push
 
 		$refEvent = $this->refEvent;
 
-		echo 'Pushing to channel: ' . $refEvent . PHP_EOL;
+		echo 'Pushing to channel: '.$refEvent.PHP_EOL;
 
 		$this->channel->on($refEvent, [], $fn);
 
 		$this->timeoutTimer = new Timer();
-		$this->timeoutTimer->schedule(function () use ($refEvent) {
+		$this->timeoutTimer->schedule(function () {
 			$this->trigger('timeout', []);
 		}, function () {
 			return $this->timeout;
