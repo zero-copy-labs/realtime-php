@@ -2,11 +2,10 @@
 
 namespace Supabase\Realtime;
 
-use Wrench\Client;
-
+use React\EventLoop\Loop;
 use Supabase\Util\Constants;
 use Supabase\Util\Timer;
-use React\EventLoop\Loop;
+use Wrench\Client;
 
 class RealtimeClient
 {

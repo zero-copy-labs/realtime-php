@@ -2,11 +2,10 @@
 
 namespace Supabase\Realtime;
 
-use Supabase\Util\Timer;
-use Supabase\Util\Transform;
-use Supabase\Util\PostgresTypes;
 use Supabase\Util\Constants;
 use Supabase\Util\Push;
+use Supabase\Util\Timer;
+use Supabase\Util\Transform;
 
 class RealtimeChannel
 {

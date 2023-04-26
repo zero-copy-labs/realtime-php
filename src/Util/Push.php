@@ -95,7 +95,7 @@ class Push
 		$this->channel->on($refEvent, [], $fn);
 
 		$this->timeoutTimer = new Timer();
-		$this->timeoutTimer->schedule(function () use ($refEvent) {
+		$this->timeoutTimer->schedule(function () {
 			$this->trigger('timeout', []);
 		}, function () {
 			return $this->timeout;
