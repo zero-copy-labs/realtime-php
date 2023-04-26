@@ -14,13 +14,13 @@ class Timer
 	}
 
 	/**
-	 * Cancel timer
+	 * Cancel timer.
+	 *
 	 * @return void
 	 */
-
 	public function reset()
 	{
-		echo PHP_EOL . 'Timer Reset' . PHP_EOL;
+		echo PHP_EOL.'Timer Reset'.PHP_EOL;
 		$this->tries = 0;
 		if (isset($this->timer)) {
 			Loop::cancelTimer($this->timer);
@@ -28,26 +28,24 @@ class Timer
 	}
 
 	/**
-	 * Create timeout timer
+	 * Create timeout timer.
+	 *
 	 * @param $fn
 	 * @param $timeoutFn
 	 * @return void
 	 */
-
 	public function schedule($fn, $timeoutFn)
 	{
 		if (isset($this->timer)) {
 			Loop::cancelTimer($this->timer);
 		}
 
-		echo 'Timer Started' . PHP_EOL;
+		echo 'Timer Started'.PHP_EOL;
 
 		$tries = $this->tries;
 		$timeout = $timeoutFn($this->tries);
 
-		echo 'Timeout:' . $timeout . 'Seconds' . PHP_EOL;
-
-		$timer;
+		echo 'Timeout:'.$timeout.'Seconds'.PHP_EOL;
 
 		Loop::addTimer($timeout, function () use ($tries, $fn) {
 			echo 'Timer expired'.PHP_EOL;
@@ -57,20 +55,18 @@ class Timer
 	}
 
 	/**
-	 * Create interval timer
+	 * Create interval timer.
+	 *
 	 * @param $fn
 	 * @param $timeoutFn
 	 * @return void
 	 */
-
 	public function interval($fn, $timeoutFn)
 	{
-
-		
 		$timeout = $timeoutFn() / 1000; // MS to Seconds
-		echo 'Interval Started with time:' . $timeout . 'Seconds' . PHP_EOL;
+		echo 'Interval Started with time:'.$timeout.'Seconds'.PHP_EOL;
 		$timer = Loop::addPeriodicTimer($timeout, function () use ($fn) {
-			echo 'Interval expired' . PHP_EOL;
+			echo 'Interval expired'.PHP_EOL;
 			$fn();
 		});
 	}

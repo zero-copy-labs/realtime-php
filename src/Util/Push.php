@@ -76,7 +76,6 @@ class Push
 
 	public function startTimeout()
 	{
-
 		if ($this->timeoutTimer) {
 			return;
 		}
