@@ -16,9 +16,8 @@ class RealtimeClient
     public array $headers;
     public array $params = [];
     public int $timeout;
-    //$transport = ;
     public int $heartbeatIntervalMs = 30000;
-    public int $refreshRate = 1;
+    public int $refreshRate = 20;
     public $heartbeatTimer;
     public $pendingHeartbeatRef;
     public int $ref = 0;
@@ -77,9 +76,21 @@ class RealtimeClient
         $this->reconnectTimer = new Timer();
     }
 
+    /**
+     * Get Reconnect timing based on tries
+     * @param int $tries
+     * @return int
+     */
+
     public function reconnectAfterMs($tries) {
-        return [1000, 2000, 5000, 10000][$tries - 1] ?? 10000;
+        $backoff = [1, 2, 5, 10];
+        return  isset($backoff[$tries - 1]) ? $backoff[$tries - 1] : end($backoff);
     }
+
+    /**
+     * Connect to websocket
+     * @return void
+     */
 
     public function connect() {
         if($this->conn) {
@@ -108,7 +119,13 @@ class RealtimeClient
         }
     }
 
-    public function disconnect($code, $reason) {
+    /**
+     * Disconnect from websocket.
+     * @return void
+     */
+
+    public function disconnect() {
+        echo 'Disconnect called' . PHP_EOL;
         if(!$this->conn) {
             return;  
         }
@@ -120,11 +137,22 @@ class RealtimeClient
         $this->reconnectTimer->reset();
     }
 
+    /**
+     * Get list of channels
+     * @return array
+     */
+
     public function getChannels() {
         return $this->channels;
     }
 
-    public function removeChannel($channel) {
+    /**
+     * Remove channel from list of channels
+     * @param RealtimeChannel $channel
+     * @return void
+     */
+
+    public function removeChannel(RealtimeChannel $channel) {
         $status = $channel->unsubscribe();
         if(count($this->channels) === 0) {
             $this->disconnect();
@@ -133,6 +161,11 @@ class RealtimeClient
         return $status;
     }
 
+    /**
+     * Remove all channels from list of channels
+     * @return void
+     */
+
     public function removeAllChannels() {
         $channels = $this->channels;
         foreach($channels as $channel) {
@@ -140,9 +173,19 @@ class RealtimeClient
         }
     }
 
-    public function log($kind, $message, $data = null) {
+    /**
+     * Echos the message to the console
+     * @return void
+     */
+
+    public function log($kind, $message = null, $data = null) {
         echo $kind . ' ' . $message . ' ' . json_encode($data) . PHP_EOL;;
     }
+
+    /**
+     * Get Connection State
+     * @return string
+     */
 
     public function connectionState() {
         switch($this->conn->readyState) {
@@ -157,12 +200,28 @@ class RealtimeClient
         }
     }
 
+    /**
+     * Is websocket connected
+     * @return bool
+     */
+
     public function isConnected() {
+
+        echo 'isConnected' . PHP_EOL;
 
         if(!isset($this->conn)) return false;
 
+        echo 'isConnected' . $this->conn->isConnected() . PHP_EOL;
+
         return $this->conn->isConnected();
     }
+
+    /**
+     * Connect to new channel
+     * @param string $topic
+     * @param array $params
+     * @return RealtimeChannel
+     */
 
     public function channel($topic, $params = []) {
         if(!$this->isConnected()) {
@@ -173,6 +232,12 @@ class RealtimeClient
         array_push($this->channels, $_channel);
         return $_channel;
     }
+
+    /**
+     * Send data to websocket
+     * @param array $data
+     * @return void
+     */
 
     public function push($data) {
         $topic = $data['topic'];
@@ -201,6 +266,12 @@ class RealtimeClient
         };
     }
 
+    /**
+     * Set Auth token
+     * @param string $token
+     * @return void
+     */
+
     public function setAuth($token) {
         $this->accessToken = $token;
 
@@ -213,6 +284,11 @@ class RealtimeClient
         }
     }
 
+    /**
+     * Create update ref
+     * @return string
+     */
+
     public function _makeRef() {
         $ref = $this->ref + 1;
         if($ref === $this->ref) {
@@ -221,6 +297,12 @@ class RealtimeClient
         
         return strval($this->ref);
     }
+
+    /**
+     * Leave Channel / Topic
+     * @param string $topic
+     * @return void
+     */
 
     public function _leaveOpenTopic($topic) {
         $_channel;
@@ -237,6 +319,12 @@ class RealtimeClient
         }
     }
 
+    /**
+     * Remove channel from list of channels
+     * @param string $channel
+     * @return void
+     */
+
     public function _remove($channel) {
         $index = array_search($channel, $this->channels);
         if($index !== false) {
@@ -244,9 +332,19 @@ class RealtimeClient
         }
     }
 
+    /**
+     * Open message receiver event loop
+     * @return void
+     */
+
     function startReceiver() {
         $this->_startReceiver();
     }
+
+    /**
+     * Get websocket endpoint url
+     * @return string
+     */
 
     private function _endPointURL() {
         return $this->_appendParams(
@@ -258,6 +356,12 @@ class RealtimeClient
             )
         );
     }
+
+    /**
+     * On incoming message from websocket trigger corresponding event hooks
+     * @param string $raw
+     * @return void
+     */
 
     private function _onConnMessage($raw) {
         $msg = json_decode($raw);
@@ -284,6 +388,11 @@ class RealtimeClient
         }
     }
 
+    /**
+     * On websocket connection open trigger corresponding event hooks
+     * @return void
+     */
+
     private function _onConnOpen() {
         $this->log('transport', 'connected to ' . $this->_endPointURL());
 
@@ -295,7 +404,9 @@ class RealtimeClient
             return;
         }
         $this->heartbeatTimer->reset();
+        echo PHP_EOL . 'heartbeat reset' . PHP_EOL;
         $this->heartbeatTimer->interval(function() {
+            echo PHP_EOL . 'heartbeat interval' . PHP_EOL;
             $this->_sendHeartbeat();
         },  function() {
             return $this->heartbeatIntervalMs;
@@ -305,14 +416,23 @@ class RealtimeClient
         }
     }
 
+    private function _triggerChanError() {
+        foreach($this->channels as $channel) {
+            $channel->_trigger(Constants::$CHANNEL_EVENTS['error']);
+        }
+    }
+
+    /** 
+     * On websocket connection close trigger corresponding event hooks
+     * @param string $event
+     * @return void
+     */
+
     private function _onConnClose($event) {
         $this->log('transport', 'close', $event);
-        if($this->loop) {
-            $this->_stopReceiver();
-        }
-        $this->triggerChanError();
+        $this->_triggerChanError();
         $this->heartbeatTimer->reset();
-        $this->reconnectTimer->scheduleTimeout(
+        $this->reconnectTimer->schedule(
             function() {
                 $this->disconnect();
                 $this->connect();
@@ -325,13 +445,25 @@ class RealtimeClient
         }
     }
 
+    /**
+     * On websocket connection error trigger corresponding event hooks
+     * @param string $error
+     */
+
     private function _onConnError($error) {
         $this->log('transport', error);
-        $this->triggerChanError();
+        $this->_triggerChanError();
         foreach($this->stateChangeCallbacks['error'] as $callback) {
             $callback($error);
         }
     }
+
+    /**
+     * Append params to url
+     * @param string $url
+     * @param array $params
+     * @return string
+     */
 
     private function _appendParams($url, $params) {
         if(count($params) === 0) {
@@ -344,6 +476,11 @@ class RealtimeClient
         } else return $url . '?' . $query;
     }
 
+    /**
+     * Flush send buffer
+     * @return void
+     */
+
     private function _flushSendBuffer() {
         if($this->isConnected() && count($this->sendBuffer) > 0) {
             $this->sendBuffer->forEach(function($callback) {
@@ -352,14 +489,26 @@ class RealtimeClient
         }
     }
 
+    /**
+     * Send heartbeat message
+     * @return void
+     */
+
     private function _sendHeartbeat() {
+
+        echo PHP_EOL . 'heartbeat firing (1)...' . PHP_EOL;
+
         if(!$this->isConnected()) {
+            echo 'Not connected, skipping heartbeat' . PHP_EOL;
             return;
         }
 
+        echo PHP_EOL . 'heartbeat firing (2)...' . PHP_EOL;
+
         if($this->pendingHeartbeatRef) {
             $this->pendingHeartbeatRef = null;
-            $this->conn->close();
+            $this->conn->disconnect();
+            $this->_onConnClose('heartbeat timeout');
             return;
         }
 
@@ -375,6 +524,12 @@ class RealtimeClient
             $this->setAuth($this->accessToken);
         }
     }
+
+    /**
+     * Throttle Events
+     * @param function $callback
+     * @param int $eventsPerSecondLimitMs
+     */
 
     private function _throttle($callback, $eventsPerSecondLimitMs) {
         return function() {
@@ -392,18 +547,25 @@ class RealtimeClient
         };
     }
 
+    /**
+     * Starts message receiver event loop
+     * @return void
+     */
+
     private function _startReceiver() {
         $this->loop = Loop::addPeriodicTimer($this->refreshRate, function() {
-            $messages = $this->conn->receive();
 
-            echo 'Checking...';
+            if(!$this->isConnected()) {
+                return;
+            }
+
+            $messages = $this->conn->receive();
     
             if (!$messages) {
                 return;
             }
             
             foreach($messages as $message) {
-                echo $message->getPayload();
                 $this->_onConnMessage($message->getPayload());
             }
     
@@ -411,6 +573,11 @@ class RealtimeClient
     
         Loop::run();
     }
+
+    /**
+     * Stops message receiver event loop
+     * @return void
+     */
 
     private function _stopReceiver() {
         Loop::cancelTimer($this->$loop);

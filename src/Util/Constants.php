@@ -8,7 +8,7 @@ class Constants
 
 	public static $VSN = '1.0.0';
 
-	public static $DEFAULT_TIMEOUT = 10000;
+	public static $DEFAULT_TIMEOUT = 10;
 
 	public static $SOCKET_CLOSE = 1000;
 

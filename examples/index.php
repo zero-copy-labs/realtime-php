@@ -21,11 +21,11 @@
         echo 'INSERT: ' . $payload['new']['id'] . PHP_EOL;
     });
 
-    $channel->subscribe(function($payload) {
-        echo $payload . PHP_EOL;
-    });
+    $channel->subscribe(function($payload) {});
 
     $socket->startReceiver();
+
+	echo 'Never gets here right?';
 
 	// $channel->on('INSERT', null, function($payload) {
 	//     echo 'INSERT: ' . $payload['new']['id'] . PHP_EOL;

@@ -76,6 +76,7 @@ class Push
 
 	public function startTimeout()
 	{
+
 		if ($this->timeoutTimer) {
 			return;
 		}
@@ -90,8 +91,6 @@ class Push
 		};
 
 		$refEvent = $this->refEvent;
-
-		echo 'Pushing to channel: ' . $refEvent . PHP_EOL;
 
 		$this->channel->on($refEvent, [], $fn);
 
@@ -132,8 +131,8 @@ class Push
 
 	private function _matchResult($result)
 	{
-		$status = $result['status'];
-		$response = $result['response'];
+		$status = $result->status;
+		$response = $result->response;
 
 		foreach ($this->hooks as $hook) {
 			$hookStatus = $hook['status'];

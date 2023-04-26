@@ -54,7 +54,7 @@ class RealtimeChannel
             $this->pushBuffer = [];
         });
         $this->_onError(function ($reason) {
-            if($this->isLeaving() || $this->isClosed()) {
+            if($this->_isLeaving() || $this->_isClosed()) {
                 return;
             }
 
@@ -63,7 +63,7 @@ class RealtimeChannel
             $this->rejoinTimer->schedule(function() {
                 $this->_rejoinUntilConnected();
             }, function($tries) {
-                $this->socket->reconnectAfterMs($tries);
+                return $this->socket->reconnectAfterMs($tries);
             });
         });
         $this->_onClose(function ($reason) {
@@ -72,7 +72,36 @@ class RealtimeChannel
             $this->state = Constants::$CHANNEL_STATES['closed'];
             $this->socket->_remove($this);
         });
+
+        $this->joinPush->receive('timeout', function() {
+            if(!$this->isJoining()){
+                return;
+            }
+
+            $this->socket->log('channel', 'timeout' . $this->topic, $this->joinPush->timeout);
+            $this->state = Constants::$CHANNEL_STATES['errored'];
+            $this->rejoinTimer->schedule(function() {
+                $this->_rejoinUntilConnected();
+            }, function($tries) {
+                return $this->socket->reconnectAfterMs($tries);
+            });
+        });
+
+        $replyEventName = function($ref) {
+            return $this->_replyEventName($ref);
+        };
+
+        $this->_on(Constants::$CHANNEL_EVENTS['reply'], [], function($payload, $ref) use ($replyEventName) {
+            $this->_trigger($replyEventName($ref), $payload);
+        });
     }
+
+    /**
+     * Subscribe to a channel (topic)
+     * @param callable $cb
+     * @param int $timeout
+     * @return 
+     */
 
     function subscribe($cb = null, $timeout = null) {
 
@@ -134,12 +163,12 @@ class RealtimeChannel
 
         $this->_rejoin($timeout);
 
-        $this->joinPush->receive('ok', function() {
+        $this->joinPush->receive('ok', function($response) use ($cb) {
             if(isset($this->socket->accessToken)) {
                 $this->socket->setAuth($this->socket->accessToken);
             }
 
-            $serverPostgresFilters = $response->payload->response->postgres_changes;
+            $serverPostgresFilters = $response->postgres_changes;
 
             if ($serverPostgresFilters == null || count($serverPostgresFilters) == 0) {
                 $cb && $cb('SUBSCRIBED');
@@ -192,6 +221,10 @@ class RealtimeChannel
 
     }
 
+    /** 
+     * 
+     */
+
     function track($payload, $options) {
         return $this->send([
             'type' => 'presence',
@@ -206,6 +239,8 @@ class RealtimeChannel
             'event' => 'untrack',
         ], $options);
     }
+
+    /**  */
 
     function on($type, $filter, $cb) {
         return $this->_on($type, $filter, $cb);
@@ -242,6 +277,10 @@ class RealtimeChannel
 
         return $res;
     }
+
+    /** Unsubscribe From Channel
+     *  @param {integer} timeout
+     */
 
     function unsubscribe($timeout = null) {
         if(!isset($timeout)) {
@@ -281,16 +320,27 @@ class RealtimeChannel
         
     }
 
+    /**
+     * Update Channel Join Payload
+     * @param {object} payload
+     * returns {void}
+     */
+
     function updateJoinPayload($payload) {
         $this->joinPush->updatePayload($payload);
     }
 
+    /**
+     * Rejoin Channel Until Connected
+     * returns {void}
+     */
+
     private function _rejoinUntilConnected() {
-        echo 'rejoin until connected';
-        $this->rejoinTimer->scheduleTimeout(function() {
+        $this->socket->log('rejoin until connected');
+        $this->rejoinTimer->schedule(function() {
             $this->_rejoinUntilConnected();
         }, function($tries) {
-            $this->socket->reconnectAfterMs($tries);
+            return $this->socket->reconnectAfterMs($tries);
         });
 
         if($this->socket->isConnected()) {
@@ -298,9 +348,13 @@ class RealtimeChannel
         }
     }
 
+    /**
+     * 
+     */
+
     private function _push($event, $payload, $timeout) {
         if(!$this->joinedOnce) {
-            throw new Exception('tried to push \'' . $event . '\' to \'' . $this->topic . '\' before joining. Use channel.subscribe() before pushing events');
+            throw new Exception('tried to push \'' . $event . '\' to \'' . $this->topic . '\' before joining. Use channel->subscribe() before pushing events');
         }
 
         $pushEvent = new Push($this, $event, $payload, $timeout);
@@ -327,13 +381,12 @@ class RealtimeChannel
         return $this->joinPush->ref;
     }
 
-    function _trigger($type, $payload, $ref = null) {
+    function _trigger($type, $payload = null, $ref = null) {
         $typeLower = strtolower($type);
         $close = Constants::$CHANNEL_EVENTS['close'];
         $error = Constants::$CHANNEL_EVENTS['error'];
         $leave = Constants::$CHANNEL_EVENTS['leave'];
         $join = Constants::$CHANNEL_EVENTS['join'];
-
         $events = [$close, $error, $leave, $join];
 
         if($ref && in_array($typeLower, $events) && $ref != $this->_joinRef()) {
@@ -361,6 +414,8 @@ class RealtimeChannel
 
         $applicableBindings = [];
 
+        
+
         if(isset($this->bindings[$typeLower]) && count($this->bindings[$typeLower]) > 0) {
             $applicableBindings = array_filter($this->bindings[$typeLower], function($binding) use ($typeLower, $payload) {
                 if(in_array($typeLower, ['broadcast', 'presence', 'postgres_changes'])) {
@@ -384,7 +439,7 @@ class RealtimeChannel
         }
 
         foreach($applicableBindings as $binding) {
-            if(isset($handledPayload['ids'])){
+            if(isset($handledPayload->ids)){
                 $postgresChanges = $handledPayload['data'];
                 $schema = $postgresChanges['schema'];
                 $table = $postgresChanges['table'];
@@ -411,25 +466,57 @@ class RealtimeChannel
         }
     }
 
+    /**
+     * Channel is Closed
+     * @return boolean
+     */
+
     function _isClosed() {
         return $this->state === Constants::$CHANNEL_STATES['closed'];
     }
+
+    /**
+     * Channel is Joined
+     * @return boolean
+     */
 
     function _isJoined() {
         return $this->state === Constants::$CHANNEL_STATES['joined'];
     }
 
+    /**
+     * Channel is Joining
+     * @return boolean
+     */
+
     function _isJoining() {
         return $this->state === Constants::$CHANNEL_STATES['joining'];
     }
+
+    /**
+     * Channel is Leaving
+     * @return boolean
+     */
 
     function _isLeaving() {
         return $this->state === Constants::$CHANNEL_STATES['leaving'];
     }
 
+    /**
+     * Channel Event Hook Ref
+     */
+
     function _replyEventName($ref) {
         return 'chan_reply_' . $ref;
     }
+
+    /**
+     * Bind Hook to Channel
+     * @param string $type
+     * @param array $filter
+     * @param function $cb
+     * @return $this
+     */
 
     private function _on($type, $filter, $cb) {
         $_type = strtolower($type);
@@ -449,15 +536,33 @@ class RealtimeChannel
         return $this;
     }
 
+    /** Check if associative arrays match
+     * @param array $a
+     * @param array $b
+     * @return boolean
+     */
+
     private static function isEqual($a, $b){
         return count(array_diff_assoc($a, $b)) == 0;
     }
 
+    /**
+     * On Channel Error
+     * @param function $cb
+     * @return void
+     */
+
     private function _onError($cb){
-        $this->on(Constants::$CHANNEL_EVENTS['error'], [], function ($reason) {
+        $this->on(Constants::$CHANNEL_EVENTS['error'], [], function ($reason) use ($cb) {
             $cb($reason);
         });
     }
+
+    /**
+     * On Channel Close
+     * @param function $cb
+     * @return void
+     */
 
     private function _onClose($cb){
         $this->on(Constants::$CHANNEL_EVENTS['close'], [], function ($reason) use($cb) {
@@ -465,9 +570,20 @@ class RealtimeChannel
         });
     }
 
+    /** 
+     * Can push channel messages
+     * @return bool
+     */
+
     private function _canPush(){
         return $this->socket->isConnected() && $this->_isJoined();
     }
+
+    /**
+     * Rejoin Channel
+     * @param int $timeout
+     * @return void
+     */
 
     private function _rejoin($timeout = null){
 
@@ -483,6 +599,8 @@ class RealtimeChannel
         $this->state = Constants::$CHANNEL_STATES['joining'];
         $this->joinPush->resend($timeout);
     }
+
+    
 
     private function _getPayloadRecords($payload) {
         $records = [
