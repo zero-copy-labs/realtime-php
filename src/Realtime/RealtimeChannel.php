@@ -217,7 +217,7 @@ class RealtimeChannel
 			$cb('TIMED_OUT');
 		});
 
-        $this->socket->receiveMessages();
+		$this->socket->receiveMessages();
 
 		return $this;
 	}
