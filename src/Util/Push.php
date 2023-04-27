@@ -130,6 +130,10 @@ class Push
 
 	private function _matchResult($result)
 	{
+		if(!isset($result->status)) {
+			return;
+		}
+
 		$status = $result->status;
 		$response = $result->response;
 

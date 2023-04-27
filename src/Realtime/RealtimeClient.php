@@ -109,7 +109,14 @@ class RealtimeClient
 			throw new \Exception('Invalid endpoint');
 		}
 
-		$this->conn = new Client($endpoint, $origin);
+        $options = [
+            'on_data_callback' => function($data) {
+                echo 'RECEIVING DATA' . $data;
+                $this->_onConnMessage($data);
+            },
+        ];
+
+		$this->conn = new Client($endpoint, $origin, $options);
 
 		$this->conn->connect();
 
@@ -212,9 +219,8 @@ class RealtimeClient
 	 */
 	public function isConnected()
 	{
-		echo 'isConnected'.PHP_EOL;
 
-		if (! isset($this->conn)) {
+		if (!isset($this->conn)) {
 			return false;
 		}
 
@@ -257,6 +263,7 @@ class RealtimeClient
 
 		$callback = function () use ($data) {
 			$result = json_encode($data);
+            echo 'Sending data: '.$result.PHP_EOL;
 			$this->conn->sendData($result);
 		};
 
@@ -522,7 +529,6 @@ class RealtimeClient
 	 */
 	private function _sendHeartbeat()
 	{
-		echo PHP_EOL.'heartbeat firing (1)...'.PHP_EOL;
 
 		if (! $this->isConnected()) {
 			echo 'Not connected, skipping heartbeat'.PHP_EOL;
@@ -530,9 +536,8 @@ class RealtimeClient
 			return;
 		}
 
-		echo PHP_EOL.'heartbeat firing (2)...'.PHP_EOL;
-
 		if ($this->pendingHeartbeatRef) {
+
 			$this->pendingHeartbeatRef = null;
 			$this->conn->disconnect();
 			$this->_onConnClose('heartbeat timeout');
@@ -551,6 +556,8 @@ class RealtimeClient
 		if (isset($this->accessToken)) {
 			$this->setAuth($this->accessToken);
 		}
+
+        $this->receiveMessages();
 	}
 
 	/**
@@ -578,6 +585,16 @@ class RealtimeClient
 		};
 	}
 
+    function receiveMessages()
+    {
+
+        if (! $this->isConnected()) {
+            return;
+        }
+
+        $messages = $this->conn->receive();
+    }
+
 	/**
 	 * Starts message receiver event loop.
 	 *
@@ -590,15 +607,7 @@ class RealtimeClient
 				return;
 			}
 
-			$messages = $this->conn->receive();
-
-			if (! $messages) {
-				return;
-			}
-
-			foreach ($messages as $message) {
-				$this->_onConnMessage($message->getPayload());
-			}
+			$this->conn->receive();
 		});
 
 		Loop::run();

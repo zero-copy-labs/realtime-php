@@ -126,7 +126,6 @@ class RealtimeChannel
 		});
 
 		$this->_onClose(function ($reason) use ($cb) {
-			throw new Exception('channel closed', $reason);
 			if (! $cb) {
 				return;
 			}
@@ -217,6 +216,8 @@ class RealtimeChannel
 		$this->joinPush->receive('timeout', function () {
 			$cb('TIMED_OUT');
 		});
+
+        $this->socket->receiveMessages();
 
 		return $this;
 	}
@@ -416,7 +417,7 @@ class RealtimeChannel
 			$applicableBindings = array_filter($this->bindings[$typeLower], function ($binding) use ($typeLower, $payload) {
 				if (in_array($typeLower, ['broadcast', 'presence', 'postgres_changes'])) {
 					$bindEvent = strtolower($binding['filter']['event']);
-					$payloadType = strtolower($payload['type']);
+					$payloadType = strtolower($payload->type);
 
 					if ($binding['id']) {
 						$bindId = $binding['id'];
