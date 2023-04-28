@@ -1,10 +1,10 @@
 <?php
 
 include __DIR__.'/../vendor/autoload.php';
-use Dotenv\Dotenv;
 
-$dotenv = Dotenv::createUnsafeImmutable(__DIR__);
-$dotenv->load();
+use Supabase\Realtime\Util\EnvSetup;
 
-$apiKey = getenv('API_KEY');
-$endpoint = getenv('ENDPOINT');
+$keys = EnvSetup::env(__DIR__);
+
+$api_key = $keys['API_KEY'];
+$reference_id = $keys['REFERENCE_ID'];

@@ -1,6 +1,8 @@
 <?php
 
-namespace Supabase\Util;
+namespace Supabase\Realtime\Util;
+
+use Supabase\Realtime\Util\Postgres;
 
 class Transform
 {
@@ -32,39 +34,43 @@ class Transform
 
 	public static function transformCell($value, $type)
 	{
-		if ($type === Postgres->Types['bool']) {
+		if ($type === Postgres::$TYPES['bool']) {
 			return self::toBoolean($value);
 		}
 
-		if ($type === Postgres->Types['oid']) {
+		if ($type === Postgres::$TYPES['oid']) {
 			return self::toInteger($value);
 		}
 
 		return $value;
 	}
 
-	public static function transformColumn($columnName, $columns, $record, $skipTypes)
+	public static function transformColumn($columnName, $column, $record, $skipTypes)
 	{
-		$column = $columns[$columnName];
-		$type = $column['type'];
-		$value = $record[$columnName];
+
+		$type = isset($column->type) ? $column->type : null;
+		$value = $record->$columnName;
 
 		if ($skipTypes) {
 			return $value;
 		}
 
-		return self::transformCell($value, $type);
+		$transformedValue = self::transformCell($value, $type);
+
+		return $transformedValue;
 	}
 
-	public static function transformChangeData($columns, $record, $options)
+	public static function transformChangeData($columns, $record, $options = [])
 	{
-		$skipTypes = $options['skipTypes'] ?? false;
-		$columns = $options['columns'] ?? $columns;
+		$skipTypes = isset($options['skipTypes']) ? $options['skipTypes'] : false;
 
 		$transformedRecord = [];
 
-		foreach ($columns as $columnName => $column) {
-			$transformedRecord[$columnName] = self::transformColumn($columnName, $columns, $record, $skipTypes);
+		foreach ($columns as $column) {
+
+			$columnName = $column->name;
+
+			$transformedRecord[$columnName] = self::transformColumn($columnName, $column, $record, $skipTypes);
 		}
 
 		return $transformedRecord;

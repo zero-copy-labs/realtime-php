@@ -1,6 +1,6 @@
 <?php
 
-namespace Supabase\Util;
+namespace Supabase\Realtime\Util;
 
 class Postgres 
 {
@@ -30,5 +30,5 @@ class Postgres
         'timetz' => 'timetz',
         'tsrange' => 'tsrange',
         'tstzrange' => 'tstzrange',
-    ]
+    ];
 }

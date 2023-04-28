@@ -3,8 +3,8 @@
 namespace Supabase\Realtime;
 
 use React\EventLoop\Loop;
-use Supabase\Util\Constants;
-use Supabase\Util\Timer;
+use Supabase\Realtime\Util\Constants;
+use Supabase\Realtime\Util\Timer;
 use Wrench\Client;
 
 class RealtimeClient
@@ -16,7 +16,7 @@ class RealtimeClient
 	public array $params = [];
 	public int $timeout;
 	public int $heartbeatIntervalMs = 30000;
-	public int $refreshRate = 20;
+	public int $refreshRate = 5;
 	public $heartbeatTimer;
 	public $pendingHeartbeatRef;
 	public int $ref = 0;
@@ -38,10 +38,11 @@ class RealtimeClient
 
 	private $loop;
 
-	public function __construct($endpoint, $options)
+	public function __construct($reference_id, $options = [])
 	{
+
 		$this->client = new \SplObjectStorage;
-		$this->endpoint = $endpoint.'/'.Constants::$TRANSPORTS['websocket'];
+		$this->endpoint = "wss://{$reference_id}.supabase.co/realtime/v1/" . Constants::$TRANSPORTS['websocket'];
 		$this->headers = Constants::getDefaultHeaders();
 		$this->timeout = Constants::$DEFAULT_TIMEOUT;
 
@@ -75,6 +76,11 @@ class RealtimeClient
 		$this->reconnectTimer = new Timer();
 	}
 
+	public function getEndpointFromRef($ref)
+	{
+		return "wss://" . $reference_id . ".supabase.co/realtime/v1"
+	}
+
 	/**
 	 * Get Reconnect timing based on tries.
 	 *
@@ -95,7 +101,8 @@ class RealtimeClient
 	 */
 	public function connect()
 	{
-		if ($this->conn) {
+
+		if ($this->isConnected()) {
 			return;
 		}
 
@@ -111,7 +118,6 @@ class RealtimeClient
 
         $options = [
             'on_data_callback' => function($data) {
-                echo 'RECEIVING DATA' . $data;
                 $this->_onConnMessage($data);
             },
         ];
@@ -132,8 +138,7 @@ class RealtimeClient
 	 */
 	public function disconnect()
 	{
-		echo 'Disconnect called'.PHP_EOL;
-		if (! $this->conn) {
+		if (! $this->conn || !$this->isConnected()) {
 			return;
 		}
 
@@ -184,13 +189,13 @@ class RealtimeClient
 	}
 
 	/**
-	 * Echos the message to the console.
+	 * Log the message.
 	 *
 	 * @return void
 	 */
 	public function log($kind, $message = null, $data = null)
 	{
-		echo $kind.' '.$message.' '.json_encode($data).PHP_EOL;
+		error_log($kind.' '.$message.' '.json_encode($data).PHP_EOL);
 	}
 
 	/**
@@ -223,8 +228,6 @@ class RealtimeClient
 		if (!isset($this->conn)) {
 			return false;
 		}
-
-		echo 'isConnected'.$this->conn->isConnected().PHP_EOL;
 
 		return $this->conn->isConnected();
 	}
@@ -263,7 +266,6 @@ class RealtimeClient
 
 		$callback = function () use ($data) {
 			$result = json_encode($data);
-            echo 'Sending data: '.$result.PHP_EOL;
 			$this->conn->sendData($result);
 		};
 
@@ -395,9 +397,11 @@ class RealtimeClient
 		$payload = $msg->payload;
 		$ref = $msg->ref;
 
-		if ($ref && $ref == $this->pendingHeartbeatRef || (isset($payload->type) && $event == $payload->type)) {
-			$this->pendingHeartbeatRef = null;
-		}
+		// if ($ref && $ref == $this->pendingHeartbeatRef || (isset($payload->type) && $event == $payload->type)) {
+		// 	$this->pendingHeartbeatRef = null;
+		// }
+
+		$this->pendingHeartbeatRef = null;
 
 		$this->log('receive', "{$topic} {$event} {$ref}", $payload);
 
@@ -430,9 +434,8 @@ class RealtimeClient
 			return;
 		}
 		$this->heartbeatTimer->reset();
-		echo PHP_EOL.'heartbeat reset'.PHP_EOL;
+
 		$this->heartbeatTimer->interval(function () {
-			echo PHP_EOL.'heartbeat interval'.PHP_EOL;
 			$this->_sendHeartbeat();
 		}, function () {
 			return $this->heartbeatIntervalMs;
@@ -441,6 +444,8 @@ class RealtimeClient
 			$callback();
 		}
 	}
+
+	
 
 	private function _triggerChanError()
 	{
@@ -462,6 +467,7 @@ class RealtimeClient
 		$this->heartbeatTimer->reset();
 		$this->reconnectTimer->schedule(
 			function () {
+				echo 'Reconnecting...' . PHP_EOL;
 				$this->disconnect();
 				$this->connect();
 			}, function ($tries) {
@@ -531,15 +537,13 @@ class RealtimeClient
 	{
 
 		if (! $this->isConnected()) {
-			echo 'Not connected, skipping heartbeat'.PHP_EOL;
-
 			return;
 		}
 
 		if ($this->pendingHeartbeatRef) {
 
 			$this->pendingHeartbeatRef = null;
-			$this->conn->disconnect();
+			$this->disconnect();
 			$this->_onConnClose('heartbeat timeout');
 
 			return;
@@ -592,7 +596,11 @@ class RealtimeClient
             return;
         }
 
-        $messages = $this->conn->receive();
+		try {
+			$this->conn->receive();
+		} catch (Exception $e) {
+			$this->log('error', $e->getMessage());
+		}
     }
 
 	/**
@@ -602,12 +610,16 @@ class RealtimeClient
 	 */
 	private function _startReceiver()
 	{
-		$this->loop = Loop::addPeriodicTimer($this->refreshRate, function () {
-			if (! $this->isConnected()) {
+
+		$context = $this;
+
+		$this->loop = Loop::addPeriodicTimer($this->refreshRate, function () use ($context) {
+			if (! $context->isConnected()) {
 				return;
 			}
 
-			$this->conn->receive();
+			$context->conn->receive();
+
 		});
 
 		Loop::run();

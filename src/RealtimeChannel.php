@@ -2,10 +2,10 @@
 
 namespace Supabase\Realtime;
 
-use Supabase\Util\Constants;
-use Supabase\Util\Push;
-use Supabase\Util\Timer;
-use Supabase\Util\Transform;
+use Supabase\Realtime\Util\Constants;
+use Supabase\Realtime\Util\Push;
+use Supabase\Realtime\Util\Timer;
+use Supabase\Realtime\Util\Transform;
 
 class RealtimeChannel
 {
@@ -86,12 +86,14 @@ class RealtimeChannel
 			});
 		});
 
-		$replyEventName = function ($ref) {
-			return $this->_replyEventName($ref);
-		};
+		// $replyEventName = function ($ref) {
+		// 	return $this->_replyEventName($ref);
+		// };
 
-		$this->_on(Constants::$CHANNEL_EVENTS['reply'], [], function ($payload, $ref) use ($replyEventName) {
-			$this->_trigger($replyEventName($ref), $payload);
+		$context = $this;
+
+		$this->_on(Constants::$CHANNEL_EVENTS['reply'], [], function ($payload, $ref) use ($context) {
+			$context->_trigger($context->_replyEventName($ref), $payload);
 		});
 	}
 
@@ -340,6 +342,8 @@ class RealtimeChannel
 			return $this->socket->reconnectAfterMs($tries);
 		});
 
+		$this->socket->log('rejoin is connected? '.$this->socket->isConnected());
+
 		if ($this->socket->isConnected()) {
 			$this->_rejoin();
 		}
@@ -378,6 +382,24 @@ class RealtimeChannel
 		return $this->joinPush->ref;
 	}
 
+	function _getPayloadRecords($payload)
+	{
+		$records = [
+			'new' => [],
+			'old' => [],
+		];
+
+		if ($payload->type == 'INSERT' || $payload->type == 'UPDATE') {
+			$records['new'] = Transform::transformChangeData($payload->columns, $payload->record);
+		}
+
+		if ($payload->type == 'UPDATE' || $payload->type == 'DELETE') {
+			$records['old'] = Transform::transformChangeData($payload->columns, $payload->old_record);
+		}
+
+		return $records;
+	}
+
 	public function _trigger($type, $payload = null, $ref = null)
 	{
 		$typeLower = strtolower($type);
@@ -414,16 +436,20 @@ class RealtimeChannel
 		$applicableBindings = [];
 
 		if (isset($this->bindings[$typeLower]) && count($this->bindings[$typeLower]) > 0) {
+			
 			$applicableBindings = array_filter($this->bindings[$typeLower], function ($binding) use ($typeLower, $payload) {
 				if (in_array($typeLower, ['broadcast', 'presence', 'postgres_changes'])) {
+
 					$bindEvent = strtolower($binding['filter']['event']);
-					$payloadType = strtolower($payload->type);
+					$payloadType = strtolower($payload->data->type);
 
-					if ($binding['id']) {
+					
+
+					if (isset($binding['id'])) {
 						$bindId = $binding['id'];
-						$bindEvent = $binding['filter']['event'];
+						$bindEvent = strtolower($binding['filter']['event']);
 
-						return $bindId && in_array($bindId, $payload['ids']) && (
+						return $bindId && in_array($bindId, $payload->ids) && (
 							$bindEvent == '*' || $bindEvent == $payloadType
 						);
 					}
@@ -434,15 +460,17 @@ class RealtimeChannel
 				return strtolower($binding['type']) == $typeLower;
 			});
 		}
+		
 
 		foreach ($applicableBindings as $binding) {
+
 			if (isset($handledPayload->ids)) {
-				$postgresChanges = $handledPayload['data'];
-				$schema = $postgresChanges['schema'];
-				$table = $postgresChanges['table'];
-				$commit_timestamp = $postgresChanges['commit_timestamp'];
-				$type = $postgresChanges['type'];
-				$errors = $postgresChanges['errors'];
+				$postgresChanges = $handledPayload->data;
+				$schema = $postgresChanges->schema;
+				$table = $postgresChanges->table;
+				$commit_timestamp = $postgresChanges->commit_timestamp;
+				$type = $postgresChanges->type;
+				$errors = $postgresChanges->errors;
 
 				$_payload = [
 					'schema' => $schema,
@@ -454,7 +482,10 @@ class RealtimeChannel
 					'old' => [],
 				];
 
-				$handledPayload = array_merge($_payload, $this._getPayloadRecords($postgresChanges));
+				$records = $this->_getPayloadRecords($postgresChanges);
+
+				$handledPayload = array_merge($_payload, $records);
+
 			}
 
 			$binding['callback']($handledPayload, $ref);
@@ -601,23 +632,7 @@ class RealtimeChannel
 		$this->socket->_leaveOpenTopic($this->topic);
 		$this->state = Constants::$CHANNEL_STATES['joining'];
 		$this->joinPush->resend($timeout);
-	}
 
-	private function _getPayloadRecords($payload)
-	{
-		$records = [
-			'new' => [],
-			'old' => [],
-		];
-
-		if ($payload->type == 'INSERT' || $payload->type == 'UPDATE') {
-			$records['new'] = Transform::tranformChangeData($payload->columns, $payload->record);
-		}
-
-		if ($payload->type == 'UPDATE' || $payload->type == 'DELETE') {
-			$records['old'] = Transform::tranformChangeData($payload->columns, $payload->old_record);
-		}
-
-		return $records;
+		$this->socket->receiveMessages();
 	}
 }

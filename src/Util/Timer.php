@@ -1,6 +1,6 @@
 <?php
 
-namespace Supabase\Util;
+namespace Supabase\Realtime\Util;
 
 use React\EventLoop\Loop;
 
@@ -20,7 +20,6 @@ class Timer
 	 */
 	public function reset()
 	{
-		echo PHP_EOL.'Timer Reset'.PHP_EOL;
 		$this->tries = 0;
 		if (isset($this->timer)) {
 			Loop::cancelTimer($this->timer);
@@ -40,15 +39,10 @@ class Timer
 			Loop::cancelTimer($this->timer);
 		}
 
-		echo 'Timer Started'.PHP_EOL;
-
 		$tries = $this->tries;
 		$timeout = $timeoutFn($this->tries);
 
-		echo 'Timeout:'.$timeout.'Seconds'.PHP_EOL;
-
 		Loop::addTimer($timeout, function () use ($tries, $fn) {
-			echo 'Timer expired'.PHP_EOL;
 			$tries = $this->tries + 1;
 			$fn();
 		});
@@ -64,9 +58,7 @@ class Timer
 	public function interval($fn, $timeoutFn)
 	{
 		$timeout = $timeoutFn() / 1000; // MS to Seconds
-		echo 'Interval Started with time:'.$timeout.'Seconds'.PHP_EOL;
 		$timer = Loop::addPeriodicTimer($timeout, function () use ($fn) {
-			echo 'Interval expired'.PHP_EOL;
 			$fn();
 		});
 	}

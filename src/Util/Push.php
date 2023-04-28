@@ -1,6 +1,6 @@
 <?php
 
-namespace Supabase\Util;
+namespace Supabase\Realtime\Util;
 
 class Push
 {
@@ -56,6 +56,7 @@ class Push
 		if ($status = 'rate limited') {
 			$this->rateLimited = true;
 		}
+		
 	}
 
 	public function updatePayload($payload)
@@ -149,6 +150,6 @@ class Push
 
 	private function _hasReceived($status)
 	{
-		return $this->result && $this->result['status'] === $status;
+		return $this->result && $this->result->status === $status;
 	}
 }
