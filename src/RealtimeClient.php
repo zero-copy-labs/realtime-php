@@ -41,10 +41,9 @@ class RealtimeClient
 
 	public function __construct($reference_id, $options = [])
 	{
-
 		$this->client = new \SplObjectStorage;
-		$this->endpoint = "wss://{$reference_id}.supabase.co/realtime/v1/" . Constants::$TRANSPORTS['websocket'];
-		echo $this->endpoint . PHP_EOL;
+		$this->endpoint = "wss://{$reference_id}.supabase.co/realtime/v1/".Constants::$TRANSPORTS['websocket'];
+		echo $this->endpoint.PHP_EOL;
 		$this->origin = "https://{$reference_id}.supabase.co";
 		$this->headers = Constants::getDefaultHeaders();
 		$this->timeout = Constants::$DEFAULT_TIMEOUT;
@@ -99,7 +98,6 @@ class RealtimeClient
 	 */
 	public function connect()
 	{
-
 		if ($this->isConnected()) {
 			return;
 		}
@@ -108,14 +106,13 @@ class RealtimeClient
 
 		$origin = $this->origin;
 
-        $options = [
-            'on_data_callback' => function($data) {
-                $this->_onConnMessage($data);
-            },
-        ];
+		$options = [
+			'on_data_callback' => function ($data) {
+				$this->_onConnMessage($data);
+			},
+		];
 
-		echo $endpoint . PHP_EOL;
-
+		echo $endpoint.PHP_EOL;
 
 		$this->conn = new Client($endpoint, $origin, $options);
 
@@ -133,7 +130,7 @@ class RealtimeClient
 	 */
 	public function disconnect()
 	{
-		if (! $this->conn || !$this->isConnected()) {
+		if (! $this->conn || ! $this->isConnected()) {
 			return;
 		}
 
@@ -439,8 +436,6 @@ class RealtimeClient
 		}
 	}
 
-	
-
 	private function _triggerChanError()
 	{
 		foreach ($this->channels as $channel) {
@@ -461,7 +456,7 @@ class RealtimeClient
 		$this->heartbeatTimer->reset();
 		$this->reconnectTimer->schedule(
 			function () {
-				echo 'Reconnecting...' . PHP_EOL;
+				echo 'Reconnecting...'.PHP_EOL;
 				$this->disconnect();
 				$this->connect();
 			}, function ($tries) {
@@ -588,5 +583,5 @@ class RealtimeClient
 		}
 
 		$this->conn->receive();
-    }
+	}
 }
