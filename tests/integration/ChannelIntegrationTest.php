@@ -31,8 +31,6 @@ final class ChannelIntegrationTest extends TestCase
 
 		$this->client = new RealtimeClient($reference_id, $options);
 
-		// Override the endpoint to use the mock server
-		$this->client->endpoint = 'wss://example.com/socket';
 	}
 
 	public function teardown(): void
