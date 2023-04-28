@@ -29,7 +29,7 @@ final class ClientUnitTest extends TestCase
 
 	// public function testAppendParams()
 	// {
-    //     $this->client = new RealtimeClient('123', []);
+	//     $this->client = new RealtimeClient('123', []);
 	// 	$url = 'https://example.com';
 	// 	$params = ['one' => 'two', 'three' => 'four'];
 	// 	$_url = $this->client->_appendParams($url, $params);
