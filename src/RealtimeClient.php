@@ -43,7 +43,6 @@ class RealtimeClient
 	{
 		$this->client = new \SplObjectStorage;
 		$this->endpoint = "wss://{$reference_id}.supabase.co/realtime/v1/".Constants::$TRANSPORTS['websocket'];
-		echo $this->endpoint.PHP_EOL;
 		$this->origin = "https://{$reference_id}.supabase.co";
 		$this->headers = Constants::getDefaultHeaders();
 		$this->timeout = Constants::$DEFAULT_TIMEOUT;
@@ -111,8 +110,6 @@ class RealtimeClient
 				$this->_onConnMessage($data);
 			},
 		];
-
-		echo $endpoint.PHP_EOL;
 
 		$this->conn = new Client($endpoint, $origin, $options);
 
@@ -456,7 +453,6 @@ class RealtimeClient
 		$this->heartbeatTimer->reset();
 		$this->reconnectTimer->schedule(
 			function () {
-				echo 'Reconnecting...'.PHP_EOL;
 				$this->disconnect();
 				$this->connect();
 			}, function ($tries) {
