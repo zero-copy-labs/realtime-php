@@ -116,11 +116,20 @@ class RealtimeClient
 			throw new \Exception('Invalid endpoint');
 		}
 
+<<<<<<< HEAD:src/RealtimeClient.php
         $options = [
             'on_data_callback' => function($data) {
                 $this->_onConnMessage($data);
             },
         ];
+=======
+		$options = [
+			'on_data_callback' => function ($data) {
+				echo 'RECEIVING DATA'.$data;
+				$this->_onConnMessage($data);
+			},
+		];
+>>>>>>> 8de8c1be4e85b7f2a4f30bfafbec43ade3434e65:src/Realtime/RealtimeClient.php
 
 		$this->conn = new Client($endpoint, $origin, $options);
 
@@ -224,8 +233,7 @@ class RealtimeClient
 	 */
 	public function isConnected()
 	{
-
-		if (!isset($this->conn)) {
+		if (! isset($this->conn)) {
 			return false;
 		}
 
@@ -266,6 +274,10 @@ class RealtimeClient
 
 		$callback = function () use ($data) {
 			$result = json_encode($data);
+<<<<<<< HEAD:src/RealtimeClient.php
+=======
+			echo 'Sending data: '.$result.PHP_EOL;
+>>>>>>> 8de8c1be4e85b7f2a4f30bfafbec43ade3434e65:src/Realtime/RealtimeClient.php
 			$this->conn->sendData($result);
 		};
 
@@ -535,13 +547,11 @@ class RealtimeClient
 	 */
 	private function _sendHeartbeat()
 	{
-
 		if (! $this->isConnected()) {
 			return;
 		}
 
 		if ($this->pendingHeartbeatRef) {
-
 			$this->pendingHeartbeatRef = null;
 			$this->disconnect();
 			$this->_onConnClose('heartbeat timeout');
@@ -561,7 +571,7 @@ class RealtimeClient
 			$this->setAuth($this->accessToken);
 		}
 
-        $this->receiveMessages();
+		$this->receiveMessages();
 	}
 
 	/**
@@ -589,12 +599,11 @@ class RealtimeClient
 		};
 	}
 
-    function receiveMessages()
-    {
-
-        if (! $this->isConnected()) {
-            return;
-        }
+	public function receiveMessages()
+	{
+		if (! $this->isConnected()) {
+			return;
+		}
 
 		$this->conn->receive();
     }

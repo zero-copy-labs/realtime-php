@@ -131,7 +131,7 @@ class Push
 
 	private function _matchResult($result)
 	{
-		if(!isset($result->status)) {
+		if (! isset($result->status)) {
 			return;
 		}
 

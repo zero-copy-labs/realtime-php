@@ -1,6 +1,7 @@
 <?php
-    include __DIR__.'/header.php';
-    use Supabase\Realtime\RealtimeClient;
+
+	include __DIR__.'/header.php';
+	use Supabase\Realtime\RealtimeClient;
 
 	$options = [
 		'headers' => [
@@ -11,7 +12,7 @@
 
 	$socket = new RealtimeClient($reference_id, $options);
 
-    $channel = $socket->channel('realtime:db-messages'); // Also tried realtime:db-messages
+	$channel = $socket->channel('realtime:db-messages'); // Also tried realtime:db-messages
 
     $channel->on('postgres_changes', [
         'event' => 'INSERT',
