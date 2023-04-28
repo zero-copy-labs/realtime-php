@@ -332,12 +332,12 @@ class RealtimeClient
 	/**
 	 * Remove channel from list of channels.
 	 *
-	 * @param  string  $channel
+	 * @param  string  $channel - The channel name to remove
 	 * @return void
 	 */
 	public function _remove($channel)
 	{
-		$index = array_search($channel, $this->channels);
+		$index = array_search($channel, array_column($this->channels, 'topic'));
 		if ($index !== false) {
 			array_splice($this->channels, $index, 1);
 		}
@@ -384,10 +384,6 @@ class RealtimeClient
 		$event = $msg->event;
 		$payload = $msg->payload;
 		$ref = $msg->ref;
-
-		// if ($ref && $ref == $this->pendingHeartbeatRef || (isset($payload->type) && $event == $payload->type)) {
-		// 	$this->pendingHeartbeatRef = null;
-		// }
 
 		$this->pendingHeartbeatRef = null;
 
@@ -471,7 +467,7 @@ class RealtimeClient
 	 */
 	private function _onConnError($error)
 	{
-		$this->log('transport', error);
+		$this->log('transport', $error);
 		$this->_triggerChanError();
 		foreach ($this->stateChangeCallbacks['error'] as $callback) {
 			$callback($error);

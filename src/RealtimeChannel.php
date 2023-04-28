@@ -19,7 +19,7 @@ class RealtimeChannel
 	public $presence;
 	public $topic;
 
-	public function __construct($topic, $params = ['config' => []], $socket)
+	public function __construct($topic, $params = [], $socket)
 	{
 		$this->state = Constants::$CHANNEL_STATES['closed'];
 		$this->socket = $socket;
@@ -33,12 +33,8 @@ class RealtimeChannel
 			'presence' => ['key' => ''],
 		];
 
-		if (! isset($params['config']) || ! is_array($params['config'])) {
-			$params['config'] = [];
-		}
-
 		$this->params = [
-			'config' => array_merge($DEFAULT_CONFIG, $params['config']),
+			'config' => array_merge($DEFAULT_CONFIG, $params),
 		];
 
 		$this->timeout = $this->socket->timeout;
