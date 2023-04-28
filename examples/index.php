@@ -5,14 +5,14 @@
 
 	$options = [
 		'headers' => [
-			'apikey' => $apiKey,
+			'apikey' => $api_key,
 		],
 		'eventsPerSecond' => '10',
 	];
 
 	$socket = new RealtimeClient($reference_id, $options);
 
-	$channel = $socket->channel('realtime:db-messages'); // Also tried realtime:db-messages
+	$channel = $socket->channel('realtime:db-messages');
 
     $channel->on('postgres_changes', [
         'event' => 'INSERT',

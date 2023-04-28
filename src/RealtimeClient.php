@@ -12,6 +12,7 @@ class RealtimeClient
 	public string $accessToken;
 	public array $channels = [];
 	public string $endpoint = '';
+	public string $origin = '';
 	public array $headers;
 	public array $params = [];
 	public int $timeout;
@@ -43,6 +44,8 @@ class RealtimeClient
 
 		$this->client = new \SplObjectStorage;
 		$this->endpoint = "wss://{$reference_id}.supabase.co/realtime/v1/" . Constants::$TRANSPORTS['websocket'];
+		echo $this->endpoint . PHP_EOL;
+		$this->origin = "https://{$reference_id}.supabase.co";
 		$this->headers = Constants::getDefaultHeaders();
 		$this->timeout = Constants::$DEFAULT_TIMEOUT;
 
@@ -76,11 +79,6 @@ class RealtimeClient
 		$this->reconnectTimer = new Timer();
 	}
 
-	public function getEndpointFromRef($ref)
-	{
-		return "wss://" . $reference_id . ".supabase.co/realtime/v1"
-	}
-
 	/**
 	 * Get Reconnect timing based on tries.
 	 *
@@ -108,28 +106,16 @@ class RealtimeClient
 
 		$endpoint = $this->_endPointURL();
 
-		if (preg_match('/wss:\/\//', $endpoint) == 1) {
-			$origin = str_replace('https://', 'wss://', $endpoint);
-		} elseif (preg_match('/ws:\/\//', $endpoint) == 1) {
-			$origin = str_replace('http://', 'ws://', $endpoint);
-		} else {
-			throw new \Exception('Invalid endpoint');
-		}
+		$origin = $this->origin;
 
-<<<<<<< HEAD:src/RealtimeClient.php
         $options = [
             'on_data_callback' => function($data) {
                 $this->_onConnMessage($data);
             },
         ];
-=======
-		$options = [
-			'on_data_callback' => function ($data) {
-				echo 'RECEIVING DATA'.$data;
-				$this->_onConnMessage($data);
-			},
-		];
->>>>>>> 8de8c1be4e85b7f2a4f30bfafbec43ade3434e65:src/Realtime/RealtimeClient.php
+
+		echo $endpoint . PHP_EOL;
+
 
 		$this->conn = new Client($endpoint, $origin, $options);
 
@@ -274,10 +260,6 @@ class RealtimeClient
 
 		$callback = function () use ($data) {
 			$result = json_encode($data);
-<<<<<<< HEAD:src/RealtimeClient.php
-=======
-			echo 'Sending data: '.$result.PHP_EOL;
->>>>>>> 8de8c1be4e85b7f2a4f30bfafbec43ade3434e65:src/Realtime/RealtimeClient.php
 			$this->conn->sendData($result);
 		};
 
