@@ -2,8 +2,6 @@
 
 namespace Supabase\Realtime\Util;
 
-use Supabase\Realtime\Util\Postgres;
-
 class Transform
 {
 	public static function toBoolean($value)
@@ -47,7 +45,6 @@ class Transform
 
 	public static function transformColumn($columnName, $column, $record, $skipTypes)
 	{
-
 		$type = isset($column->type) ? $column->type : null;
 		$value = $record->$columnName;
 
@@ -67,7 +64,6 @@ class Transform
 		$transformedRecord = [];
 
 		foreach ($columns as $column) {
-
 			$columnName = $column->name;
 
 			$transformedRecord[$columnName] = self::transformColumn($columnName, $column, $record, $skipTypes);
