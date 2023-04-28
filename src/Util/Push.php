@@ -56,7 +56,6 @@ class Push
 		if ($status = 'rate limited') {
 			$this->rateLimited = true;
 		}
-		
 	}
 
 	public function updatePayload($payload)

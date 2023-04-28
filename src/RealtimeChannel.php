@@ -382,7 +382,7 @@ class RealtimeChannel
 		return $this->joinPush->ref;
 	}
 
-	function _getPayloadRecords($payload)
+	public function _getPayloadRecords($payload)
 	{
 		$records = [
 			'new' => [],
@@ -436,14 +436,10 @@ class RealtimeChannel
 		$applicableBindings = [];
 
 		if (isset($this->bindings[$typeLower]) && count($this->bindings[$typeLower]) > 0) {
-			
 			$applicableBindings = array_filter($this->bindings[$typeLower], function ($binding) use ($typeLower, $payload) {
 				if (in_array($typeLower, ['broadcast', 'presence', 'postgres_changes'])) {
-
 					$bindEvent = strtolower($binding['filter']['event']);
 					$payloadType = strtolower($payload->data->type);
-
-					
 
 					if (isset($binding['id'])) {
 						$bindId = $binding['id'];
@@ -460,10 +456,8 @@ class RealtimeChannel
 				return strtolower($binding['type']) == $typeLower;
 			});
 		}
-		
 
 		foreach ($applicableBindings as $binding) {
-
 			if (isset($handledPayload->ids)) {
 				$postgresChanges = $handledPayload->data;
 				$schema = $postgresChanges->schema;
@@ -485,7 +479,6 @@ class RealtimeChannel
 				$records = $this->_getPayloadRecords($postgresChanges);
 
 				$handledPayload = array_merge($_payload, $records);
-
 			}
 
 			$binding['callback']($handledPayload, $ref);
