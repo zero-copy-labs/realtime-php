@@ -596,43 +596,6 @@ class RealtimeClient
             return;
         }
 
-		try {
-			$this->conn->receive();
-		} catch (Exception $e) {
-			$this->log('error', $e->getMessage());
-		}
+		$this->conn->receive();
     }
-
-	/**
-	 * Starts message receiver event loop.
-	 *
-	 * @return void
-	 */
-	private function _startReceiver()
-	{
-
-		$context = $this;
-
-		$this->loop = Loop::addPeriodicTimer($this->refreshRate, function () use ($context) {
-			if (! $context->isConnected()) {
-				return;
-			}
-
-			$context->conn->receive();
-
-		});
-
-		Loop::run();
-	}
-
-	/**
-	 * Stops message receiver event loop.
-	 *
-	 * @return void
-	 */
-	private function _stopReceiver()
-	{
-		Loop::cancelTimer($this->$loop);
-		$this->loop = null;
-	}
 }
