@@ -3,10 +3,8 @@
 declare(strict_types=1);
 
 use PHPUnit\Framework\TestCase;
-use Supabase\Realtime\Util\EnvSetup;
 use Supabase\Realtime\RealtimeClient;
-use Supabase\Realtime\RealtimeChannel;
-
+use Supabase\Realtime\Util\EnvSetup;
 
 final class ChannelIntegrationTest extends TestCase
 {

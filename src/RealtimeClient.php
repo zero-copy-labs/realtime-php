@@ -332,7 +332,7 @@ class RealtimeClient
 	/**
 	 * Remove channel from list of channels.
 	 *
-	 * @param  string  $channel - The channel name to remove
+	 * @param  string  $channel  - The channel name to remove
 	 * @return void
 	 */
 	public function _remove($channel)
