@@ -28,7 +28,6 @@ final class ChannelIntegrationTest extends TestCase
 		];
 
 		$this->client = new RealtimeClient($reference_id, $options);
-
 	}
 
 	public function teardown(): void
