@@ -3,10 +3,9 @@
 declare(strict_types=1);
 
 use PHPUnit\Framework\TestCase;
-use Supabase\Realtime\Util\EnvSetup;
-use Supabase\Realtime\RealtimeClient;
 use Supabase\Realtime\RealtimeChannel;
-
+use Supabase\Realtime\RealtimeClient;
+use Supabase\Realtime\Util\EnvSetup;
 
 final class ChannelUnitTest extends TestCase
 {
@@ -30,7 +29,6 @@ final class ChannelUnitTest extends TestCase
 		];
 
 		$this->client = new RealtimeClient($reference_id, $options);
-
 	}
 
 	public function teardown(): void
@@ -94,7 +92,8 @@ final class ChannelUnitTest extends TestCase
 		$this->assertEquals('1234', $joinPush->timeout);
 	}
 
-	public function testChannelJoinedState() {
+	public function testChannelJoinedState()
+	{
 		$this->channel = new RealtimeChannel('topic', ['one' => 'two'], $this->client);
 
 		$this->channel->state = 'joined';
@@ -102,7 +101,8 @@ final class ChannelUnitTest extends TestCase
 		$this->assertEquals(true, $this->channel->_isJoined());
 	}
 
-	public function testChannelJoiningState() {
+	public function testChannelJoiningState()
+	{
 		$this->channel = new RealtimeChannel('topic', ['one' => 'two'], $this->client);
 
 		$this->channel->state = 'joining';
@@ -110,7 +110,8 @@ final class ChannelUnitTest extends TestCase
 		$this->assertEquals(true, $this->channel->_isJoining());
 	}
 
-	public function testChannelClosedState() {
+	public function testChannelClosedState()
+	{
 		$this->channel = new RealtimeChannel('topic', ['one' => 'two'], $this->client);
 
 		$this->channel->state = 'closed';
@@ -118,7 +119,8 @@ final class ChannelUnitTest extends TestCase
 		$this->assertEquals(true, $this->channel->_isClosed());
 	}
 
-	public function testChannelLeavingState() {
+	public function testChannelLeavingState()
+	{
 		$this->channel = new RealtimeChannel('topic', ['one' => 'two'], $this->client);
 
 		$this->channel->state = 'leaving';
@@ -126,12 +128,12 @@ final class ChannelUnitTest extends TestCase
 		$this->assertEquals(true, $this->channel->_isLeaving());
 	}
 
-	public function testChannelReplyEventName() {
+	public function testChannelReplyEventName()
+	{
 		$this->channel = new RealtimeChannel('topic', ['one' => 'two'], $this->client);
 
 		$event = 'chan_reply_1234';
 
 		$this->assertEquals($event, $this->channel->_replyEventName('1234'));
 	}
-
 }
