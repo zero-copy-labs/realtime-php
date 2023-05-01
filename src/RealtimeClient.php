@@ -38,6 +38,7 @@ class RealtimeClient
 	public array $events = ['broadcast', 'presence', 'postgres_changes'];
 
 	private $loop;
+	private $client;
 
 	public function __construct($reference_id, $options = [])
 	{

@@ -18,8 +18,11 @@ class RealtimeChannel
 	public $pushBuffer = [];
 	public $presence;
 	public $topic;
+	public $params;
 
-	public function __construct($topic, $params = [], $socket)
+	private $socket;
+
+	public function __construct($topic, $params, $socket)
 	{
 		$this->state = Constants::$CHANNEL_STATES['closed'];
 		$this->socket = $socket;
@@ -34,7 +37,7 @@ class RealtimeChannel
 		];
 
 		$this->params = [
-			'config' => array_merge($DEFAULT_CONFIG, $params),
+			'config' => array_merge($DEFAULT_CONFIG, $params ?? []),
 		];
 
 		$this->timeout = $this->socket->timeout;

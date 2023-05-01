@@ -5,7 +5,6 @@ declare(strict_types=1);
 use PHPUnit\Framework\TestCase;
 use Supabase\Realtime\RealtimeChannel;
 use Supabase\Realtime\RealtimeClient;
-use Supabase\Realtime\Util\EnvSetup;
 
 final class ChannelUnitTest extends TestCase
 {
@@ -16,19 +15,15 @@ final class ChannelUnitTest extends TestCase
 	{
 		parent::setUp();
 
-		$keys = EnvSetup::env(__DIR__.'/../../');
-		$api_key = $keys['API_KEY'];
-		$reference_id = $keys['REFERENCE_ID'];
-
 		$options = [
 			'headers' => [
-				'apikey' => $api_key,
+				'apikey' => 'theapikey',
 			],
 			'eventsPerSecond' => '10',
 			'timeout' => 1234,
 		];
 
-		$this->client = new RealtimeClient($reference_id, $options);
+		$this->client = new RealtimeClient('12312343', $options);
 	}
 
 	public function teardown(): void
