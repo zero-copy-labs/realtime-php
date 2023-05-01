@@ -26,14 +26,4 @@ final class ClientUnitTest extends TestCase
 		$this->client->_remove('channel1');
 		$this->assertEquals(1, count($this->client->channels));
 	}
-
-	// public function testAppendParams()
-	// {
-	//     $this->client = new RealtimeClient('123', []);
-	// 	$url = 'https://example.com';
-	// 	$params = ['one' => 'two', 'three' => 'four'];
-	// 	$_url = $this->client->_appendParams($url, $params);
-
-	// 	$this->assertEquals('https://example.com?one=two&three=four', $_url);
-	// }
 }

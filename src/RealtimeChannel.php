@@ -19,8 +19,7 @@ class RealtimeChannel
 	public $presence;
 	public $topic;
 	public $params;
-
-	private $socket;
+	public $socket;
 
 	public function __construct($topic, $params, $socket)
 	{

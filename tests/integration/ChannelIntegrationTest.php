@@ -15,7 +15,7 @@ final class ChannelIntegrationTest extends TestCase
 	{
 		parent::setUp();
 
-		$keys = EnvSetup::env(__DIR__.'/../../');
+		$keys = EnvSetup::env(__DIR__.'/../');
 		$api_key = $keys['API_KEY'];
 		$reference_id = $keys['REFERENCE_ID'];
 
