@@ -132,6 +132,7 @@ class RealtimeClient
 			$this->heartbeatTimer->reset();
 			$this->reconnectTimer->reset();
 			Loop::stop();
+
 			return;
 		}
 
