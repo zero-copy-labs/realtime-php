@@ -129,6 +129,9 @@ class RealtimeClient
 	public function disconnect()
 	{
 		if (! $this->conn || ! $this->isConnected()) {
+			$this->heartbeatTimer->reset();
+			$this->reconnectTimer->reset();
+			Loop::stop();
 			return;
 		}
 
@@ -137,6 +140,8 @@ class RealtimeClient
 		$this->conn = null;
 		$this->heartbeatTimer->reset();
 		$this->reconnectTimer->reset();
+
+		Loop::stop();
 	}
 
 	/**

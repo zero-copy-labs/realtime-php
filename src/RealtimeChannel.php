@@ -280,9 +280,7 @@ class RealtimeChannel
 	 */
 	public function unsubscribe($timeout = null)
 	{
-		if (! isset($timeout)) {
-			$timeout = $this->timeout;
-		}
+		$timeout = $timeout ?? $this->timeout;
 		$this->state = Constants::$CHANNEL_STATES['leaving'];
 
 		$onClose = function () {

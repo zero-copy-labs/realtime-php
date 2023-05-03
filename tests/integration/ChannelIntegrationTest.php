@@ -15,7 +15,7 @@ final class ChannelIntegrationTest extends TestCase
 	{
 		parent::setUp();
 
-		$keys = EnvSetup::env(__DIR__.'/../');
+		$keys = EnvSetup::env(__DIR__.'/../../');
 		$api_key = $keys['API_KEY'];
 		$reference_id = $keys['REFERENCE_ID'];
 
@@ -41,7 +41,7 @@ final class ChannelIntegrationTest extends TestCase
 
 	public function _joinTestChannel()
 	{
-		$this->channel = $this->client->channel('topic', ['one' => 'two']);
+		$this->channel = $this->client->channel('realtime:public', ['one' => 'two']);
 	}
 
 	public function testJoiningState()
@@ -62,9 +62,10 @@ final class ChannelIntegrationTest extends TestCase
 		$this->channel->subscribe();
 
 		$this->assertEquals(true, $this->channel->joinedOnce);
+
 	}
 
-	public function testJoinPushAccessToken()
+	public function testJoinPushAccessToken(): void
 	{
 		$this->client->accessToken = 'access_token_1234';
 		$this->_joinTestChannel();
@@ -73,6 +74,6 @@ final class ChannelIntegrationTest extends TestCase
 
 		$joinPush = $this->channel->joinPush;
 
-		$this->assertEquals('access_token_1234', $joinPush->payload['accessToken']);
+		$this->assertEquals('access_token_1234', $joinPush->payload['access_token']);
 	}
 }
