@@ -64,7 +64,6 @@ final class ChannelIntegrationTest extends TestCase
 		$this->channel->subscribe();
 
 		$this->assertEquals(true, $this->channel->joinedOnce);
-
 	}
 
 	public function testJoinPushAccessToken(): void
