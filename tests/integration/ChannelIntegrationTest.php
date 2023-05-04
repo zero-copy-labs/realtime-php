@@ -44,7 +44,7 @@ final class ChannelIntegrationTest extends TestCase
 		$this->channel = $this->client->channel('realtime:public', ['one' => 'two']);
 	}
 
-	public function testJoinedState()
+	public function testJoiningState()
 	{
 		$this->_joinTestChannel();
 
@@ -52,7 +52,7 @@ final class ChannelIntegrationTest extends TestCase
 
 		$this->channel->subscribe();
 
-		$this->assertEquals('joined', $this->channel->state);
+		$this->assertEquals('joining', $this->channel->state);
 	}
 
 	public function testJoinedOnce()
