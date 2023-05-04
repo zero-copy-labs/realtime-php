@@ -44,13 +44,15 @@ final class ChannelIntegrationTest extends TestCase
 		$this->channel = $this->client->channel('realtime:public', ['one' => 'two']);
 	}
 
-	public function testJoiningState()
+	public function testJoinedState()
 	{
 		$this->_joinTestChannel();
 
+		$this->assertEquals('closed', $this->channel->state);
+
 		$this->channel->subscribe();
 
-		$this->assertEquals('joining', $this->channel->state);
+		$this->assertEquals('joined', $this->channel->state);
 	}
 
 	public function testJoinedOnce()
@@ -67,13 +69,14 @@ final class ChannelIntegrationTest extends TestCase
 
 	public function testJoinPushAccessToken(): void
 	{
-		$this->client->accessToken = 'access_token_1234';
+		$mockToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyfQ.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c';
+		$this->client->accessToken = $mockToken;
 		$this->_joinTestChannel();
 
 		$this->channel->subscribe();
 
 		$joinPush = $this->channel->joinPush;
 
-		$this->assertEquals('access_token_1234', $joinPush->payload['access_token']);
+		$this->assertEquals($mockToken, $joinPush->payload['access_token']);
 	}
 }
